@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Manifest/window-level theme only. The actual UI styling lives in the
+        Compose Material3 theme (see PointsTheme). This platform parent avoids a
+        dependency on AppCompat while giving the window a sane no-action-bar base.
+    -->
+    <style name="Theme.Points" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
