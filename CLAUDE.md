@@ -110,6 +110,14 @@ server-side code exchange + JWKS verification + HTTP-only session cookies.
 - **EOF newline:** every source file (`.kt`, `.kts`, `.swift`, `.xml`, `.toml`, `.md`) ends with exactly one LF.
 - **Commits:** atomic, small-to-medium, self-contained and buildable, single-purpose. Do not batch unrelated changes.
   Tests ship in the same commit as the code they cover. End commit messages with the Co-Authored-By trailer.
+- **Worktrees & PRs (autonomy guardrail):** **all feature work happens in a git worktree under `./.wt/`** — never edit,
+  commit, or build for a task in the primary checkout. Start every task with
+  `git worktree add .wt/<branch-name> -b <branch-name> origin/main` (branch fresh from `origin/main`), do the work there,
+  push the branch, and open a PR from it with `gh pr create`. Remove the worktree (`git worktree remove .wt/<branch-name>`)
+  once the PR merges. `.wt/` is gitignored. **Never commit, push, or merge directly to `main`, and never merge a PR
+  autonomously** — PR creation, commits, and CI are fair game without asking; the merge is the one irreversible step and
+  waits for a human. `main` is branch-protected (PR + passing CI required, force-push and direct pushes blocked for
+  everyone including admins), so this is enforced server-side as well as by convention.
 - **Secrets (PUBLIC REPO):** secrets only via env vars / gitignored local files — never committed. The `Secrets`
   object (backend) and gitignored token files (clients) are the only places secrets live. Scan staged diffs before
   every push.
