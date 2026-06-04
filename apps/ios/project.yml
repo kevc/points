@@ -1,0 +1,53 @@
+name: Points
+options:
+  bundleIdPrefix: com.points
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    # Apple Silicon only: drop the dead Intel simulator slice so even a generic
+    # "Any iOS Simulator" build resolves to a single (arm64) Kotlin framework.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+    # PointsKit.framework is produced by the Gradle task in the pre-build phase
+    # below and lands in this per-configuration / per-SDK directory.
+    FRAMEWORK_SEARCH_PATHS:
+      - $(inherited)
+      - $(SRCROOT)/../../core/presentation/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+    # PointsKit is a static Kotlin/Native framework; link it directly.
+    OTHER_LDFLAGS:
+      - $(inherited)
+      - -framework
+      - PointsKit
+
+targets:
+  Points:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.points.ios
+        INFOPLIST_FILE: Info.plist
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+    preBuildScripts:
+      - name: "Build PointsKit (Kotlin/Native + SKIE)"
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          cd "$SRCROOT/../.."
+          ./gradlew :core:presentation:embedAndSignAppleFrameworkForXcode
+
+schemes:
+  Points:
+    build:
+      targets:
+        Points: all
+    run:
+      config: Debug
+    archive:
+      config: Release

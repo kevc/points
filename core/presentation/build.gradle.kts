@@ -1,5 +1,6 @@
 plugins {
     id("points.kmp.library")
+    alias(libs.plugins.skie)
 }
 
 android {
@@ -7,8 +8,9 @@ android {
 }
 
 kotlin {
-    // Export an iOS framework consumed by the SwiftUI app. SKIE is layered on in
-    // the iOS scaffold task (#12), where it can be validated against full Xcode.
+    // Export an iOS framework consumed by the SwiftUI app. SKIE (applied above)
+    // rewrites the Obj-C interface into idiomatic Swift (async/await, sealed
+    // enums, AsyncSequence) when the framework is linked.
     val frameworkName = "PointsKit"
     iosX64().binaries.framework { baseName = frameworkName; isStatic = true }
     iosArm64().binaries.framework { baseName = frameworkName; isStatic = true }

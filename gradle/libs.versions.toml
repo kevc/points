@@ -9,7 +9,7 @@ decompose = "3.2.2"
 mvikotlin = "4.2.0"
 koin = "4.0.0"
 kover = "0.9.1"
-skie = "0.10.1"
+skie = "0.10.6"
 compose-bom = "2024.12.01"
 androidx-activity-compose = "1.9.3"
 
