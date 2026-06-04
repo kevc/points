@@ -9,28 +9,52 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import com.arkivanov.decompose.extensions.compose.subscribeAsState
+import com.arkivanov.decompose.retainedComponent
+import com.points.core.presentation.hello.HelloComponent
+import com.points.core.presentation.root.RootComponent
+import org.koin.core.context.GlobalContext
+import org.koin.core.parameter.parametersOf
 
 /**
- * Single launcher activity. This is the Milestone 1 placeholder screen: it renders
- * a static "Points" label with no shared Kotlin state. Wiring the Decompose root
- * component and shared presentation logic happens in a later task (#16).
+ * Single launcher activity. Builds the shared Decompose [RootComponent] (retained
+ * across configuration changes) from Koin, and renders its hello state.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val root = retainedComponent { componentContext ->
+            GlobalContext.get().get<RootComponent> { parametersOf(componentContext) }
+        }
+
         setContent {
             PointsTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    PointsPlaceholder()
+                    HelloScreen(root.hello)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HelloScreen(component: HelloComponent) {
+    val state by component.state.subscribeAsState()
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = state.greeting,
+            style = MaterialTheme.typography.headlineMedium,
+        )
     }
 }
 
@@ -38,25 +62,4 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PointsTheme(content: @Composable () -> Unit) {
     MaterialTheme(content = content)
-}
-
-@Composable
-private fun PointsPlaceholder() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Points",
-            style = MaterialTheme.typography.headlineMedium,
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PointsPlaceholderPreview() {
-    PointsTheme {
-        PointsPlaceholder()
-    }
 }
