@@ -50,5 +50,8 @@ Pods/
 # ---- macOS ----
 .DS_Store
 
+# ---- Git worktrees (all feature work happens here) ----
+.wt/
+
 # ---- Logs / misc ----
 *.log
