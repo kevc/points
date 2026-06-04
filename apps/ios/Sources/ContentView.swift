@@ -2,15 +2,33 @@ import SwiftUI
 import PointsKit
 
 struct ContentView: View {
+    @StateObject private var model: HelloModel
+
+    init(component: HelloComponent) {
+        _model = StateObject(wrappedValue: HelloModel(component))
+    }
+
     var body: some View {
-        // PointsKit — the SKIE-exported shared Kotlin framework — is linked and
-        // importable here. Rendering live shared component state is wired in #17.
-        Text("Points")
+        Text(model.greeting)
             .font(.largeTitle)
             .padding()
     }
 }
 
-#Preview {
-    ContentView()
+/// Bridges the shared Decompose `Value` into an observable SwiftUI model.
+private final class HelloModel: ObservableObject {
+    @Published var greeting: String
+    private var cancellation: DecomposeCancellation?
+
+    init(_ component: HelloComponent) {
+        let state = component.state
+        greeting = state.value.greeting
+        cancellation = state.subscribe { [weak self] newState in
+            self?.greeting = newState.greeting
+        }
+    }
+
+    deinit {
+        cancellation?.cancel()
+    }
 }
