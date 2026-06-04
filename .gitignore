@@ -1,0 +1,54 @@
+# ---- Secrets (PUBLIC REPO — never commit) ----
+*.env
+.env
+.env.*
+secrets.properties
+local.properties
+**/google-services.json
+**/service-account*.json
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+# Local secret resource files (e.g. injected API tokens)
+**/src/main/res/values/*secret*.xml
+**/src/main/res/values/*token*.xml
+
+# ---- Local dev databases (H2, SQLite scratch) ----
+/backend/data/
+*.mv.db
+*.trace.db
+*.db-shm
+*.db-wal
+
+# ---- Gradle / Kotlin ----
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+.kotlin/
+
+# ---- IntelliJ / Android Studio / Fleet ----
+.idea/
+*.iml
+*.ipr
+*.iws
+.fleet/
+
+# ---- Android ----
+captures/
+.cxx/
+
+# ---- Xcode / iOS ----
+xcuserdata/
+*.xcuserstate
+DerivedData/
+**/*.xcworkspace/xcuserdata/
+Pods/
+*.xcscmblueprint
+
+# ---- macOS ----
+.DS_Store
+
+# ---- Logs / misc ----
+*.log
