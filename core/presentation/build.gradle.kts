@@ -23,6 +23,7 @@ kotlin {
             implementation(libs.mvikotlin.main)
             implementation(libs.mvikotlin.coroutines)
             implementation(libs.kotlinx.coroutines.core)
+            api(libs.koin.core)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
