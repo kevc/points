@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to a PR cancels the previous in-flight run for that ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build + coverage
+    # macOS runner: the KMP modules declare iOS targets (iosX64 / iosArm64 /
+    # iosSimulatorArm64), so `./gradlew build` runs framework LINK tasks that
+    # require a full Xcode toolchain — only available on the macOS runners.
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Set up JDK 21
+        # Gradle 8.11.1 requires JDK 21 to run.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        # Installs the command-line tools and puts `sdkmanager` on PATH; the
+        # macOS runner's preinstalled SDK does not expose it.
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        # AGP needs compileSdk 36 / build-tools 36; install and accept licenses
+        # explicitly so the build never blocks on a missing/unlicensed package.
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build (includes iOS framework link)
+        run: ./gradlew build
+
+      - name: Coverage report (Kover)
+        run: ./gradlew koverHtmlReport
+
+      - name: Upload Kover HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kover-html-report
+          path: build/reports/kover/html
+          if-no-files-found: error
