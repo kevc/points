@@ -7,6 +7,7 @@ android-targetSdk = "36"
 coroutines = "1.9.0"
 serialization = "1.7.3"
 ktor = "3.0.3"
+datetime = "0.6.1"
 decompose = "3.2.2"
 mvikotlin = "4.2.0"
 koin = "4.0.0"
@@ -19,6 +20,7 @@ androidx-activity-compose = "1.9.3"
 # Runtime libraries (consumed by feature modules)
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "datetime" }
 decompose = { module = "com.arkivanov.decompose:decompose", version.ref = "decompose" }
 decompose-extensions-compose = { module = "com.arkivanov.decompose:extensions-compose", version.ref = "decompose" }
 mvikotlin = { module = "com.arkivanov.mvikotlin:mvikotlin", version.ref = "mvikotlin" }
