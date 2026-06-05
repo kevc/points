@@ -1,0 +1,25 @@
+-- The append-only event ledger. Rows are never updated (except an idempotent re-insert of the same id
+-- during sync) and never hard-deleted; a "reset" is a compensating delta row, and deleting a point type
+-- is a tombstone elsewhere. The current value of a type is SUM(delta) over its rows.
+
+CREATE TABLE point_event (
+    id            TEXT    NOT NULL PRIMARY KEY,
+    point_type_id TEXT    NOT NULL,
+    delta         INTEGER NOT NULL,
+    device_id     TEXT    NOT NULL,
+    created_at    INTEGER NOT NULL
+);
+
+CREATE INDEX point_event_by_type ON point_event(point_type_id);
+
+-- Idempotent upsert by client-generated id: re-receiving an event during sync is a no-op union.
+upsert:
+INSERT OR REPLACE INTO point_event(id, point_type_id, delta, device_id, created_at)
+VALUES (?, ?, ?, ?, ?);
+
+-- Current value for a type. COALESCE makes an empty ledger evaluate to 0 (one row, never null).
+valueForType:
+SELECT COALESCE(SUM(delta), 0) FROM point_event WHERE point_type_id = ?;
+
+eventsForType:
+SELECT * FROM point_event WHERE point_type_id = ? ORDER BY created_at, id;
