@@ -20,5 +20,6 @@ dependencyResolutionManagement {
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(":core:domain")
+include(":core:database")
 include(":core:presentation")
 include(":apps:android")
