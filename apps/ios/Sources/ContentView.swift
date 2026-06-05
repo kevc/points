@@ -2,29 +2,41 @@ import SwiftUI
 import PointsKit
 
 struct ContentView: View {
-    @StateObject private var model: HelloModel
+    @StateObject private var model: CounterModel
+    private let component: CounterComponent
 
-    init(component: HelloComponent) {
-        _model = StateObject(wrappedValue: HelloModel(component))
+    init(component: CounterComponent) {
+        self.component = component
+        _model = StateObject(wrappedValue: CounterModel(component))
     }
 
     var body: some View {
-        Text(model.greeting)
+        VStack(spacing: 24) {
+            Text("\(model.value)")
+                .font(.system(size: 72, weight: .bold))
+                .monospacedDigit()
+
+            HStack(spacing: 24) {
+                Button("-") { component.onDecrement() }
+                Button("+") { component.onIncrement() }
+            }
             .font(.largeTitle)
-            .padding()
+            .buttonStyle(.bordered)
+        }
+        .padding()
     }
 }
 
-/// Bridges the shared Decompose `Value` into an observable SwiftUI model.
-private final class HelloModel: ObservableObject {
-    @Published var greeting: String
+/// Bridges the shared Decompose `Value<CounterStore.State>` into an observable SwiftUI model.
+private final class CounterModel: ObservableObject {
+    @Published var value: Int64
     private var cancellation: DecomposeCancellation?
 
-    init(_ component: HelloComponent) {
+    init(_ component: CounterComponent) {
         let state = component.state
-        greeting = state.value.greeting
+        value = state.value.value
         cancellation = state.subscribe { [weak self] newState in
-            self?.greeting = newState.greeting
+            self?.value = newState.value
         }
     }
 

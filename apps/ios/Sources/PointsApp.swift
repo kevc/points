@@ -12,7 +12,7 @@ struct PointsApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(component: root.hello)
+            ContentView(component: root.counter)
         }
     }
 }
