@@ -5,6 +5,7 @@ android-compileSdk = "36"
 android-minSdk = "24"
 android-targetSdk = "36"
 coroutines = "1.9.0"
+serialization = "1.7.3"
 decompose = "3.2.2"
 mvikotlin = "4.2.0"
 koin = "4.0.0"
@@ -24,6 +25,7 @@ mvikotlin-main = { module = "com.arkivanov.mvikotlin:mvikotlin-main", version.re
 mvikotlin-coroutines = { module = "com.arkivanov.mvikotlin:mvikotlin-extensions-coroutines", version.ref = "mvikotlin" }
 koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 # Jetpack Compose (Android app UI). Versions are governed by the Compose BOM.
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
@@ -42,6 +44,7 @@ kover-gradlePlugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", ver
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

@@ -21,4 +21,5 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(":core:domain")
 include(":core:presentation")
+include(":shared:contract")
 include(":apps:android")
