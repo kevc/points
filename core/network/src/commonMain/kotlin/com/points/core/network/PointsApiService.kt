@@ -2,6 +2,8 @@ package com.points.core.network
 
 import com.points.shared.contract.PointEventDto
 import com.points.shared.contract.PointValueDto
+import com.points.shared.contract.SyncRequestDto
+import com.points.shared.contract.SyncResponseDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -12,9 +14,10 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 
 /**
- * Thin client over the Points backend. The M2 endpoints are un-authenticated:
+ * Thin client over the Points backend. The endpoints are un-authenticated until M6:
  *  - `POST /events`               — append one event (idempotent upsert by id server-side)
  *  - `GET  /points/{id}?owner=`   — current value (`SUM(delta)`) for an owner's point type
+ *  - `POST /sync`                 — batch push pending events + pull the ones this device is missing
  */
 class PointsApiService(
     private val client: HttpClient,
@@ -29,4 +32,10 @@ class PointsApiService(
 
     suspend fun getValue(ownerId: String, pointTypeId: String): PointValueDto =
         client.get("$baseUrl/points/$pointTypeId") { parameter("owner", ownerId) }.body()
+
+    suspend fun sync(request: SyncRequestDto): SyncResponseDto =
+        client.post("$baseUrl/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }.body()
 }

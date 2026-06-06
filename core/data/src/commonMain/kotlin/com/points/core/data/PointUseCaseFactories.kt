@@ -6,6 +6,7 @@ import com.points.core.domain.DecrementPoint
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObservePointValue
 import com.points.core.domain.PointRepository
+import com.points.core.domain.SyncPointEvents
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
@@ -23,3 +24,6 @@ fun decrementPoint(repo: PointRepository, io: CoroutineDispatcher): DecrementPoi
 
 fun observePointValue(repo: PointRepository): ObservePointValue =
     ObservePointValue { pointTypeId -> repo.observeValue(pointTypeId) }
+
+fun syncPointEvents(repo: PointRepository, io: CoroutineDispatcher): SyncPointEvents =
+    SyncPointEvents { withContext(io) { repo.sync() } }
