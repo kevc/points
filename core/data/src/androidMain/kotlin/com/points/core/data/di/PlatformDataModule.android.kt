@@ -1,5 +1,7 @@
 package com.points.core.data.di
 
+import com.points.core.data.AndroidConnectivityMonitor
+import com.points.core.data.ConnectivityMonitor
 import com.points.core.data.DatabaseDriverFactory
 import com.points.core.network.defaultHttpClientEngine
 import io.ktor.client.engine.HttpClientEngine
@@ -16,4 +18,5 @@ actual val platformDataModule: Module = module {
     single { DatabaseDriverFactory(androidContext()) }
     single<HttpClientEngine> { defaultHttpClientEngine() }
     single(named("baseUrl")) { "http://10.0.2.2:8080" }
+    single<ConnectivityMonitor> { AndroidConnectivityMonitor(androidContext()) }
 }
