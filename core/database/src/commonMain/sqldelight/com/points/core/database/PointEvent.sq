@@ -5,6 +5,10 @@
 -- Every row is scoped to an owner_id (the tenancy/partition key from local_state). The local ledger holds
 -- a single owner today, but scoping every query by owner keeps the schema correct when an owner is rebound
 -- to an account (M6) and mirrors the server, where one ledger holds many owners.
+--
+-- `pending` is 1 for a locally-created event not yet confirmed by the backend, 0 once sync has pushed it
+-- (and for every event pulled down from the server). It is the push half of sync's two watermarks; the
+-- server `seq` cursor (in local_state) is the pull half.
 
 CREATE TABLE point_event (
     id            TEXT    NOT NULL PRIMARY KEY,
@@ -12,15 +16,17 @@ CREATE TABLE point_event (
     point_type_id TEXT    NOT NULL,
     delta         INTEGER NOT NULL,
     device_id     TEXT    NOT NULL,
-    created_at    INTEGER NOT NULL
+    created_at    INTEGER NOT NULL,
+    pending       INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX point_event_by_owner_type ON point_event(owner_id, point_type_id);
 
--- Idempotent upsert by client-generated id: re-receiving an event during sync is a no-op union.
+-- Idempotent upsert by client-generated id: re-receiving an event during sync is a no-op union. `pending`
+-- is set by the caller — 1 for a local append, 0 for an event applied from the server.
 upsert:
-INSERT OR REPLACE INTO point_event(id, owner_id, point_type_id, delta, device_id, created_at)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO point_event(id, owner_id, point_type_id, delta, device_id, created_at, pending)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- Current value for an owner's type. COALESCE makes an empty ledger evaluate to 0 (one row, never null).
 valueForType:
@@ -28,3 +34,11 @@ SELECT COALESCE(SUM(delta), 0) FROM point_event WHERE owner_id = ? AND point_typ
 
 eventsForType:
 SELECT * FROM point_event WHERE owner_id = ? AND point_type_id = ? ORDER BY created_at, id;
+
+-- The owner's events awaiting upload — sync's push set.
+pendingEvents:
+SELECT * FROM point_event WHERE owner_id = ? AND pending = 1 ORDER BY created_at, id;
+
+-- Mark events confirmed by the backend (after a successful sync push).
+clearPending:
+UPDATE point_event SET pending = 0 WHERE owner_id = ? AND id IN ?;

@@ -71,6 +71,35 @@ class LocalEventDataSourceTest {
     }
 
     @Test
+    fun localInsertsArePendingUntilCleared() {
+        val ds = newDataSource()
+        val a = Uuid.random()
+        val b = Uuid.random()
+        ds.insert(event(1, id = a))
+        ds.insert(event(1, id = b))
+        assertEquals(setOf(a.toString(), b.toString()), ds.pendingEvents().map { it.id.toString() }.toSet())
+
+        ds.clearPending(listOf(a.toString()))
+        assertEquals(listOf(b.toString()), ds.pendingEvents().map { it.id.toString() })
+    }
+
+    @Test
+    fun syncedEventsAreNotPending() {
+        val ds = newDataSource()
+        ds.applySynced(event(1))
+        assertTrue(ds.pendingEvents().isEmpty())
+        assertEquals(1L, ds.value(typeId)) // still counts toward the value
+    }
+
+    @Test
+    fun cursorStartsAtZeroAndAdvances() {
+        val ds = newDataSource()
+        assertEquals(0L, ds.syncCursor())
+        ds.setCursor(42)
+        assertEquals(42L, ds.syncCursor())
+    }
+
+    @Test
     fun identityIsProvisionedAndStableAcrossReopen() {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         LocalEventDataSource.createSchema(driver)

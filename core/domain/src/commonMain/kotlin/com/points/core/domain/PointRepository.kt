@@ -18,4 +18,7 @@ interface PointRepository {
 
     /** Emits the current value (`SUM(delta)`) for [pointTypeId], re-emitting whenever it changes. */
     fun observeValue(pointTypeId: Uuid): Flow<Long>
+
+    /** Uploads pending events and pulls missing ones, merging additively. Idempotent and best-effort. */
+    suspend fun sync()
 }

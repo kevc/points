@@ -27,3 +27,31 @@ data class PointValueDto(
     val pointTypeId: String,
     val value: Long,
 )
+
+/**
+ * A batch sync request: the push + pull halves in one round trip for one [ownerId].
+ *
+ * @property sinceSeq the highest server `seq` this client has already stored. The server returns only
+ *   events newer than this — clock-skew-proof, unlike a timestamp cursor.
+ * @property events the client's pending (not-yet-confirmed) events to upload; the server upserts them by
+ *   id (idempotent) and assigns each a `seq`.
+ */
+@Serializable
+data class SyncRequestDto(
+    val ownerId: String,
+    val sinceSeq: Long,
+    val events: List<PointEventDto>,
+)
+
+/**
+ * The batch sync response: the events the client was missing, and the cursor to send next time.
+ *
+ * @property events the owner's events with `seq` greater than the request's `sinceSeq`, ascending.
+ * @property nextSeq the highest `seq` in [events] (or the request's `sinceSeq` if none) — the client stores
+ *   it as its new cursor.
+ */
+@Serializable
+data class SyncResponseDto(
+    val events: List<PointEventDto>,
+    val nextSeq: Long,
+)

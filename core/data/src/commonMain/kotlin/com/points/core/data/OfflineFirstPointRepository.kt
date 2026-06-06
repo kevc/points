@@ -5,16 +5,22 @@ import com.points.core.domain.PointEvent
 import com.points.core.domain.PointRepository
 import com.points.core.network.PointsApiService
 import com.points.shared.contract.PointEventDto
+import com.points.shared.contract.SyncRequestDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * Offline-first [PointRepository]. Every increment/decrement is written to the local ledger first
- * (the source of truth for display), then pushed to the backend best-effort: a missing or failing
- * network is not an error — unsynced events reconcile on the next sync pass (M3). The observed value
- * comes from the local ledger so the UI updates immediately, online or off.
+ * Offline-first [PointRepository]. Every increment/decrement is written to the local ledger first (the
+ * source of truth for display) and marked pending; the observed value comes from the local ledger so the
+ * UI updates immediately, online or off. [append] then kicks a best-effort [sync] — a missing or failing
+ * network is not an error, since the event stays pending and reconciles on the next sync.
+ *
+ * [sync] is the batch protocol: it uploads pending events and pulls the ones this device is missing
+ * (`seq` greater than the stored cursor), unions them in, and advances the cursor. Because the value is
+ * `SUM(delta)`, concurrent offline edits across devices merge additively (PN-counter style CRDT).
  */
 @OptIn(ExperimentalUuidApi::class)
 class OfflineFirstPointRepository(
@@ -32,11 +38,25 @@ class OfflineFirstPointRepository(
             createdAt = clock.now(),
         )
         local.insert(event)
-        runCatching { api.postEvent(event.toDto(local.ownerId)) }
+        runCatching { sync() } // best-effort; offline leaves the event pending for the next pass
         return event
     }
 
     override fun observeValue(pointTypeId: Uuid): Flow<Long> = local.observeValue(pointTypeId)
+
+    override suspend fun sync() {
+        val pending = local.pendingEvents()
+        val response = api.sync(
+            SyncRequestDto(
+                ownerId = local.ownerId,
+                sinceSeq = local.syncCursor(),
+                events = pending.map { it.toDto(local.ownerId) },
+            ),
+        )
+        response.events.forEach { local.applySynced(it.toPointEvent()) }
+        local.clearPending(pending.map { it.id.toString() })
+        local.setCursor(response.nextSeq)
+    }
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -47,4 +67,13 @@ private fun PointEvent.toDto(ownerId: String) = PointEventDto(
     delta = delta,
     deviceId = deviceId,
     createdAt = createdAt.toString(),
+)
+
+@OptIn(ExperimentalUuidApi::class)
+private fun PointEventDto.toPointEvent() = PointEvent(
+    id = Uuid.parse(id),
+    pointTypeId = Uuid.parse(pointTypeId),
+    delta = delta,
+    deviceId = deviceId,
+    createdAt = Instant.parse(createdAt),
 )
