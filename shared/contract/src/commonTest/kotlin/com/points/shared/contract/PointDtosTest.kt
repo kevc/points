@@ -14,6 +14,7 @@ class PointDtosTest {
     fun pointEventDtoRoundTrips() {
         val dto = PointEventDto(
             id = "11111111-1111-1111-1111-111111111111",
+            ownerId = "00000000-0000-0000-0000-000000000000",
             pointTypeId = "22222222-2222-2222-2222-222222222222",
             delta = -3,
             deviceId = "device-a",
@@ -26,5 +27,30 @@ class PointDtosTest {
     fun pointValueDtoRoundTrips() {
         val dto = PointValueDto(pointTypeId = "22222222-2222-2222-2222-222222222222", value = 42)
         assertEquals(dto, json.decodeFromString<PointValueDto>(json.encodeToString(dto)))
+    }
+
+    @Test
+    fun syncRequestDtoRoundTrips() {
+        val dto = SyncRequestDto(
+            ownerId = "00000000-0000-0000-0000-000000000000",
+            sinceSeq = 7,
+            events = listOf(
+                PointEventDto(
+                    id = "11111111-1111-1111-1111-111111111111",
+                    ownerId = "00000000-0000-0000-0000-000000000000",
+                    pointTypeId = "22222222-2222-2222-2222-222222222222",
+                    delta = 1,
+                    deviceId = "device-a",
+                    createdAt = "2026-06-04T12:00:00Z",
+                ),
+            ),
+        )
+        assertEquals(dto, json.decodeFromString<SyncRequestDto>(json.encodeToString(dto)))
+    }
+
+    @Test
+    fun syncResponseDtoRoundTrips() {
+        val dto = SyncResponseDto(events = emptyList(), nextSeq = 12)
+        assertEquals(dto, json.decodeFromString<SyncResponseDto>(json.encodeToString(dto)))
     }
 }

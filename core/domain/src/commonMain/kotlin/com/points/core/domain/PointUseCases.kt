@@ -39,3 +39,12 @@ suspend operator fun DecrementPoint.invoke(pointTypeId: Uuid): PointEvent = invo
 fun interface ObservePointValue {
     operator fun invoke(pointTypeId: Uuid): Flow<Long>
 }
+
+/**
+ * Reconciles the local ledger with the backend: uploads pending events and pulls any the device is missing,
+ * merging additively. Safe to call repeatedly (idempotent) and best-effort (a network failure leaves the
+ * local ledger untouched and pending events intact for the next pass).
+ */
+fun interface SyncPointEvents {
+    suspend operator fun invoke()
+}
