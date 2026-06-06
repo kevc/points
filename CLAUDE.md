@@ -113,7 +113,9 @@ server-side code exchange + JWKS verification + HTTP-only session cookies.
 - **Worktrees & PRs (autonomy guardrail):** **all feature work happens in a git worktree under `./.wt/`** — never edit,
   commit, or build for a task in the primary checkout. Start every task with
   `git worktree add .wt/<branch-name> -b <branch-name> origin/main` (branch fresh from `origin/main`), do the work there,
-  push the branch, and open a PR from it with `gh pr create`. Remove the worktree (`git worktree remove .wt/<branch-name>`)
+  push the branch, and open a PR from it with `gh pr create`. **Every PR body must include a closing keyword that links
+  its tracking issue** (`Closes #N` / `Fixes #N`, one per issue the PR fully resolves) so the issue auto-closes when the
+  PR merges — a bare `#N` reference is not enough. Remove the worktree (`git worktree remove .wt/<branch-name>`)
   once the PR merges. `.wt/` is gitignored. **Never commit, push, or merge directly to `main`, and never merge a PR
   autonomously** — PR creation, commits, and CI are fair game without asking; the merge is the one irreversible step and
   waits for a human. `main` is branch-protected (PR + passing CI required, force-push and direct pushes blocked for
