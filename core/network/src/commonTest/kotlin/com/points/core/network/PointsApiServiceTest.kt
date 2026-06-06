@@ -32,6 +32,7 @@ class PointsApiServiceTest {
         service.postEvent(
             PointEventDto(
                 id = "id-1",
+                ownerId = "owner-1",
                 pointTypeId = "type-1",
                 delta = 2,
                 deviceId = "device-a",
@@ -43,12 +44,14 @@ class PointsApiServiceTest {
         assertEquals(HttpMethod.Post, method)
         assertTrue(body.contains("\"delta\":2"), "body was: $body")
         assertTrue(body.contains("\"pointTypeId\":\"type-1\""), "body was: $body")
+        assertTrue(body.contains("\"ownerId\":\"owner-1\""), "body was: $body")
     }
 
     @Test
     fun getValueParsesResponse() = runTest {
         val engine = MockEngine { request ->
             assertEquals("/points/type-1", request.url.encodedPath)
+            assertEquals("owner-1", request.url.parameters["owner"])
             respond(
                 content = """{"pointTypeId":"type-1","value":7}""",
                 status = HttpStatusCode.OK,
@@ -57,6 +60,6 @@ class PointsApiServiceTest {
         }
         val service = PointsApiService(pointsHttpClient(engine), "https://api.test")
 
-        assertEquals(PointValueDto("type-1", 7), service.getValue("type-1"))
+        assertEquals(PointValueDto("type-1", 7), service.getValue("owner-1", "type-1"))
     }
 }

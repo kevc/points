@@ -37,15 +37,14 @@ class OfflineFirstPointRepositoryTest {
         )
     }
 
-    private fun repository(api: PointsApiService): PointRepository {
+    private fun newLocal(): LocalEventDataSource {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         LocalEventDataSource.createSchema(driver)
-        return OfflineFirstPointRepository(
-            local = LocalEventDataSource(driver, Dispatchers.Unconfined),
-            api = api,
-            deviceId = "device-test",
-        )
+        return LocalEventDataSource(driver, Dispatchers.Unconfined)
     }
+
+    private fun repository(api: PointsApiService, local: LocalEventDataSource = newLocal()): PointRepository =
+        OfflineFirstPointRepository(local = local, api = api)
 
     private val offlineApi = PointsApiService(
         pointsHttpClient(MockEngine { error("offline") }),
@@ -63,20 +62,25 @@ class OfflineFirstPointRepositoryTest {
 
     @Test
     fun appendReturnsTheStoredEventWithDeviceAttribution() = runTest {
-        val repo = repository(offlineApi)
+        val local = newLocal()
+        val repo = repository(offlineApi, local)
         val event = repo.append(typeId, 3)
         assertEquals(typeId, event.pointTypeId)
         assertEquals(3L, event.delta)
-        assertEquals("device-test", event.deviceId)
+        assertTrue(event.deviceId.isNotBlank())
+        assertEquals(local.deviceId, event.deviceId) // stamped from the install's provisioned identity
     }
 
     @Test
-    fun appendPushesEventToBackend() = runTest {
+    fun appendPushesEventToBackendWithOwner() = runTest {
         val api = RecordingApi()
-        val repo = repository(api.service)
+        val local = newLocal()
+        val repo = repository(api.service, local)
         repo.append(typeId, 2)
         assertEquals(1, api.posted.size)
-        assertTrue(api.posted.single().contains("\"delta\":2"), "posted: ${api.posted}")
+        val body = api.posted.single()
+        assertTrue(body.contains("\"delta\":2"), "posted: $body")
+        assertTrue(body.contains("\"ownerId\":\"${local.ownerId}\""), "posted: $body")
     }
 
     @Test

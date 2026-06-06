@@ -22,19 +22,21 @@ class DatabaseEventStorage(private val dataSource: DataSource) : EventStorage {
         dataSource.connection.use { connection ->
             connection.prepareStatement(UPSERT).use { statement ->
                 statement.setString(1, event.id)
-                statement.setString(2, event.pointTypeId)
-                statement.setLong(3, event.delta)
-                statement.setString(4, event.deviceId)
-                statement.setString(5, event.createdAt)
+                statement.setString(2, event.ownerId)
+                statement.setString(3, event.pointTypeId)
+                statement.setLong(4, event.delta)
+                statement.setString(5, event.deviceId)
+                statement.setString(6, event.createdAt)
                 statement.executeUpdate()
             }
         }
     }
 
-    override suspend fun valueFor(pointTypeId: String): Long = withContext(Dispatchers.IO) {
+    override suspend fun valueFor(ownerId: String, pointTypeId: String): Long = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
             connection.prepareStatement(VALUE_FOR_TYPE).use { statement ->
-                statement.setString(1, pointTypeId)
+                statement.setString(1, ownerId)
+                statement.setString(2, pointTypeId)
                 statement.executeQuery().use { rs -> if (rs.next()) rs.getLong(1) else 0L }
             }
         }
@@ -44,6 +46,7 @@ class DatabaseEventStorage(private val dataSource: DataSource) : EventStorage {
         const val CREATE_TABLE = """
             CREATE TABLE IF NOT EXISTS point_event (
                 id            VARCHAR(64)  PRIMARY KEY,
+                owner_id      VARCHAR(64)  NOT NULL,
                 point_type_id VARCHAR(64)  NOT NULL,
                 delta         BIGINT       NOT NULL,
                 device_id     VARCHAR(128) NOT NULL,
@@ -53,9 +56,10 @@ class DatabaseEventStorage(private val dataSource: DataSource) : EventStorage {
 
         // MERGE ... KEY(id) is H2's idempotent upsert: re-sending an event by id replaces, never doubles.
         const val UPSERT =
-            "MERGE INTO point_event (id, point_type_id, delta, device_id, created_at) KEY(id) VALUES (?, ?, ?, ?, ?)"
+            "MERGE INTO point_event (id, owner_id, point_type_id, delta, device_id, created_at) KEY(id) " +
+                "VALUES (?, ?, ?, ?, ?, ?)"
 
         const val VALUE_FOR_TYPE =
-            "SELECT COALESCE(SUM(delta), 0) FROM point_event WHERE point_type_id = ?"
+            "SELECT COALESCE(SUM(delta), 0) FROM point_event WHERE owner_id = ? AND point_type_id = ?"
     }
 }

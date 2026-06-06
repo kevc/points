@@ -9,6 +9,7 @@ import com.points.shared.contract.PointValueDto
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -40,7 +41,7 @@ class EventRoutesTest {
         suspend fun post(id: String, delta: Long) {
             val response = client.post("/events") {
                 contentType(ContentType.Application.Json)
-                setBody(PointEventDto(id, type, delta, "device-a", "2026-06-04T12:00:00Z"))
+                setBody(PointEventDto(id, OWNER, type, delta, "device-a", "2026-06-04T12:00:00Z"))
             }
             assertEquals(HttpStatusCode.Accepted, response.status)
         }
@@ -49,7 +50,7 @@ class EventRoutesTest {
         post("e2", 1)
         post("e3", -1)
 
-        val value: PointValueDto = client.get("/points/$type").body()
+        val value: PointValueDto = client.get("/points/$type") { parameter("owner", OWNER) }.body()
         assertEquals(PointValueDto(type, 1), value)
     }
 
@@ -58,7 +59,7 @@ class EventRoutesTest {
         installPoints()
         val client = createClient { install(ContentNegotiation) { json() } }
 
-        val value: PointValueDto = client.get("/points/never-seen").body()
+        val value: PointValueDto = client.get("/points/never-seen") { parameter("owner", OWNER) }.body()
         assertEquals(0L, value.value)
     }
 
@@ -67,12 +68,35 @@ class EventRoutesTest {
         installPoints()
         val client = createClient { install(ContentNegotiation) { json() } }
         val type = "type-1"
-        val event = PointEventDto("dup", type, 1, "device-a", "2026-06-04T12:00:00Z")
+        val event = PointEventDto("dup", OWNER, type, 1, "device-a", "2026-06-04T12:00:00Z")
 
         client.post("/events") { contentType(ContentType.Application.Json); setBody(event) }
         client.post("/events") { contentType(ContentType.Application.Json); setBody(event) }
 
-        val value: PointValueDto = client.get("/points/$type").body()
+        val value: PointValueDto = client.get("/points/$type") { parameter("owner", OWNER) }.body()
         assertEquals(1L, value.value)
+    }
+
+    @Test
+    fun valuesAreIsolatedPerOwner() = testApplication {
+        installPoints()
+        val client = createClient { install(ContentNegotiation) { json() } }
+        val type = "type-1"
+
+        suspend fun post(id: String, owner: String, delta: Long) {
+            client.post("/events") {
+                contentType(ContentType.Application.Json)
+                setBody(PointEventDto(id, owner, type, delta, "device-a", "2026-06-04T12:00:00Z"))
+            }
+        }
+        post("a1", "owner-a", 5)
+        post("b1", "owner-b", 3)
+
+        assertEquals(5L, client.get("/points/$type") { parameter("owner", "owner-a") }.body<PointValueDto>().value)
+        assertEquals(3L, client.get("/points/$type") { parameter("owner", "owner-b") }.body<PointValueDto>().value)
+    }
+
+    private companion object {
+        const val OWNER = "owner-1"
     }
 }

@@ -20,8 +20,8 @@ import org.koin.dsl.module
 /**
  * Data-layer bindings: the offline-first repository over the local ledger + API client, and the
  * individual use cases components inject. The `named("io")` dispatcher comes from the presentation
- * dispatcher module; the SQL driver, HTTP engine, `named("baseUrl")`, and `named("deviceId")` come
- * from [platformDataModule].
+ * dispatcher module; the SQL driver, HTTP engine, and `named("baseUrl")` come from [platformDataModule].
+ * Owner/device identity is provisioned and held by [LocalEventDataSource], not injected.
  */
 val dataModule: Module = module {
     single { get<DatabaseDriverFactory>().create() }
@@ -32,7 +32,6 @@ val dataModule: Module = module {
         OfflineFirstPointRepository(
             local = get(),
             api = get(),
-            deviceId = get<String>(named("deviceId")),
         )
     }
     factory<IncrementPoint> { incrementPoint(get(), get<CoroutineDispatcher>(named("io"))) }
@@ -40,5 +39,5 @@ val dataModule: Module = module {
     factory<ObservePointValue> { observePointValue(get()) }
 }
 
-/** Platform-supplied bindings: SQL driver factory, HTTP engine, API base URL, and device id. */
+/** Platform-supplied bindings: SQL driver factory, HTTP engine, and API base URL. */
 expect val platformDataModule: Module

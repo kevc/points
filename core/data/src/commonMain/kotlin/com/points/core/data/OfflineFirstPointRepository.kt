@@ -20,7 +20,6 @@ import kotlin.uuid.Uuid
 class OfflineFirstPointRepository(
     private val local: LocalEventDataSource,
     private val api: PointsApiService,
-    private val deviceId: String,
     private val clock: Clock = Clock.System,
 ) : PointRepository {
 
@@ -29,11 +28,11 @@ class OfflineFirstPointRepository(
             id = Uuid.random(),
             pointTypeId = pointTypeId,
             delta = delta,
-            deviceId = deviceId,
+            deviceId = local.deviceId,
             createdAt = clock.now(),
         )
         local.insert(event)
-        runCatching { api.postEvent(event.toDto()) }
+        runCatching { api.postEvent(event.toDto(local.ownerId)) }
         return event
     }
 
@@ -41,8 +40,9 @@ class OfflineFirstPointRepository(
 }
 
 @OptIn(ExperimentalUuidApi::class)
-private fun PointEvent.toDto() = PointEventDto(
+private fun PointEvent.toDto(ownerId: String) = PointEventDto(
     id = id.toString(),
+    ownerId = ownerId,
     pointTypeId = pointTypeId.toString(),
     delta = delta,
     deviceId = deviceId,

@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -67,5 +68,20 @@ class LocalEventDataSourceTest {
         ds.insert(event(3))
         ds.insert(event(-1))
         assertEquals(2L, ds.observeValue(typeId).first())
+    }
+
+    @Test
+    fun identityIsProvisionedAndStableAcrossReopen() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        LocalEventDataSource.createSchema(driver)
+
+        val first = LocalEventDataSource(driver, Dispatchers.Unconfined)
+        assertTrue(first.ownerId.isNotBlank())
+        assertTrue(first.deviceId.isNotBlank())
+
+        // Reopening over the same database reuses the provisioned identity (no orphaned ledger).
+        val second = LocalEventDataSource(driver, Dispatchers.Unconfined)
+        assertEquals(first.ownerId, second.ownerId)
+        assertEquals(first.deviceId, second.deviceId)
     }
 }

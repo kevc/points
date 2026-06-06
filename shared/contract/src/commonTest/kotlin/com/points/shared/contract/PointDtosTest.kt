@@ -14,6 +14,7 @@ class PointDtosTest {
     fun pointEventDtoRoundTrips() {
         val dto = PointEventDto(
             id = "11111111-1111-1111-1111-111111111111",
+            ownerId = "00000000-0000-0000-0000-000000000000",
             pointTypeId = "22222222-2222-2222-2222-222222222222",
             delta = -3,
             deviceId = "device-a",

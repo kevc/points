@@ -14,9 +14,11 @@ import io.ktor.server.routing.routing
 import io.ktor.server.util.getOrFail
 
 /**
- * The M2 (un-authenticated) ledger endpoints:
- *  - `POST /events`      — append one event (idempotent upsert by id).
- *  - `GET  /points/{id}` — the current value (`SUM(delta)`) for a point type.
+ * The M2 (un-authenticated) ledger endpoints, scoped by owner:
+ *  - `POST /events`             — append one event (idempotent upsert by id; owner carried in the body).
+ *  - `GET  /points/{id}?owner=` — the current value (`SUM(delta)`) for an owner's point type.
+ *
+ * The `owner` query param stands in for the authenticated principal until M6 (Google sign-in) replaces it.
  */
 fun Application.configureEventRoutes(storage: StorageContainer) {
     routing {
@@ -28,7 +30,8 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
 
         get("/points/{id}") {
             val pointTypeId = call.parameters.getOrFail("id")
-            val value = storage.events.valueFor(pointTypeId)
+            val ownerId = call.request.queryParameters.getOrFail("owner")
+            val value = storage.events.valueFor(ownerId, pointTypeId)
             call.respond(PointValueDto(pointTypeId = pointTypeId, value = value))
         }
     }
@@ -36,6 +39,7 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
 
 private fun PointEventDto.toStored() = StoredEvent(
     id = id,
+    ownerId = ownerId,
     pointTypeId = pointTypeId,
     delta = delta,
     deviceId = deviceId,
