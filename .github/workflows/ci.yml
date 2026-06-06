@@ -14,11 +14,87 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build + coverage
-    # macOS runner: the KMP modules declare iOS targets (iosX64 / iosArm64 /
-    # iosSimulatorArm64), so `./gradlew build` runs framework LINK tasks that
-    # require a full Xcode toolchain — only available on the macOS runners.
+  # Detects whether anything that feeds the iOS framework changed, so the
+  # expensive macOS job can be skipped on PRs that touch only the backend or
+  # the Android app. Pure backend/** or apps/android/** changes leave ios=false.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Path filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            ios:
+              - 'core/**'
+              - 'shared/**'
+              - 'apps/ios/**'
+              - 'build-logic/**'
+              - 'gradle/**'
+              - 'gradle.properties'
+              - 'settings.gradle.kts'
+              - 'build.gradle.kts'
+              - '.github/workflows/ci.yml'
+
+  # JVM/Android unit tests + coverage. Runs on the cheap, fast Linux runner for
+  # every push and PR — none of these tasks need Xcode. The KMP modules still
+  # *declare* iOS targets, but configuring them on Linux is fine; we just never
+  # compile or link them here.
+  jvm:
+    name: JVM/Android tests + coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        # Gradle 8.11.1 requires JDK 21 to run.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        # Installs the command-line tools and puts `sdkmanager` on PATH for the
+        # Android unit-test variants.
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        # AGP needs compileSdk 36 / build-tools 36; install and accept licenses
+        # explicitly so the build never blocks on a missing/unlicensed package.
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Test (Android unit + JVM + backend) and coverage
+        # koverHtmlReport drives the commonTest (JVM/Android) + androidUnitTest
+        # test tasks across the KMP modules; the backend has its own JVM tests.
+        run: ./gradlew testDebugUnitTest :backend:test koverHtmlReport
+
+      - name: Upload Kover HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: kover-html-report
+          path: build/reports/kover/html
+          if-no-files-found: error
+
+  # iOS framework compile + link — the ONLY part that needs the macOS/Xcode
+  # toolchain. Skipped on PRs that touch no iOS-relevant paths; always run on
+  # `main` so the integration branch never regresses the iOS link.
+  ios:
+    name: iOS framework link
+    needs: changes
+    if: needs.changes.outputs.ios == 'true' || github.ref == 'refs/heads/main'
     runs-on: macos-15
 
     steps:
@@ -40,27 +116,34 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Set up Android SDK
-        # Installs the command-line tools and puts `sdkmanager` on PATH; the
-        # macOS runner's preinstalled SDK does not expose it.
-        uses: android-actions/setup-android@v3
+      - name: Link iOS framework + run iOS tests
+        # Links both framework variants and compiles/runs the commonTest sources
+        # on the iOS simulator target — full iOS-path coverage without redoing
+        # the Android/JVM work the `jvm` job already did. No Android SDK needed.
+        run: >
+          ./gradlew
+          :core:presentation:linkDebugFrameworkIosArm64
+          :core:presentation:linkDebugFrameworkIosSimulatorArm64
+          iosSimulatorArm64Test
 
-      - name: Install Android SDK packages
-        # AGP needs compileSdk 36 / build-tools 36; install and accept licenses
-        # explicitly so the build never blocks on a missing/unlicensed package.
+  # Single required status check for branch protection. Passes when the JVM job
+  # succeeded and the iOS job either succeeded or was legitimately skipped — so a
+  # no-iOS PR goes green without a skipped-but-required job blocking the merge.
+  ci:
+    name: CI
+    needs: [jvm, ios]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Build (includes iOS framework link)
-        run: ./gradlew build
-
-      - name: Coverage report (Kover)
-        run: ./gradlew koverHtmlReport
-
-      - name: Upload Kover HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: kover-html-report
-          path: build/reports/kover/html
-          if-no-files-found: error
+          echo "jvm result: ${{ needs.jvm.result }}"
+          echo "ios result: ${{ needs.ios.result }}"
+          if [ "${{ needs.jvm.result }}" != "success" ]; then
+            echo "::error::jvm job did not succeed"
+            exit 1
+          fi
+          if [ "${{ needs.ios.result }}" != "success" ] && [ "${{ needs.ios.result }}" != "skipped" ]; then
+            echo "::error::ios job failed"
+            exit 1
+          fi
