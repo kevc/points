@@ -1,6 +1,8 @@
 package com.points.core.data.di
 
+import com.points.core.data.ConnectivityMonitor
 import com.points.core.data.DatabaseDriverFactory
+import com.points.core.data.IosConnectivityMonitor
 import com.points.core.network.defaultHttpClientEngine
 import io.ktor.client.engine.HttpClientEngine
 import org.koin.core.module.Module
@@ -15,4 +17,5 @@ actual val platformDataModule: Module = module {
     single { DatabaseDriverFactory() }
     single<HttpClientEngine> { defaultHttpClientEngine() }
     single(named("baseUrl")) { "http://localhost:8080" }
+    single<ConnectivityMonitor> { IosConnectivityMonitor() }
 }
