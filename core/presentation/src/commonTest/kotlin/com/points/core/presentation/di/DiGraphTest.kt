@@ -8,7 +8,10 @@ import com.points.core.domain.DecrementPoint
 import com.points.core.domain.GreetUseCase
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObservePointValue
+import com.points.core.domain.ObserveSyncStatus
 import com.points.core.domain.PointEvent
+import com.points.core.domain.SyncPointEvents
+import com.points.core.domain.SyncStatus
 import com.points.core.presentation.root.RootComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.flowOf
@@ -36,13 +39,15 @@ private val testDispatcherModule = module {
 /**
  * Stand-in for the real data module: fake use cases so the component graph resolves without a SQL
  * driver or HTTP engine (those need a platform). [ObservePointValue] reports a fixed value to prove
- * the counter store wires the observed flow into its state.
+ * the counter store wires the observed flow into its state; [ObserveSyncStatus] does the same for sync.
  */
 @OptIn(ExperimentalUuidApi::class)
 private val fakeDataModule = module {
     factory<IncrementPoint> { IncrementPoint { id, delta -> fakeEvent(id, delta) } }
     factory<DecrementPoint> { DecrementPoint { id, delta -> fakeEvent(id, -delta) } }
     factory<ObservePointValue> { ObservePointValue { flowOf(7L) } }
+    factory<ObserveSyncStatus> { ObserveSyncStatus { flowOf(SyncStatus.Synced) } }
+    factory<SyncPointEvents> { SyncPointEvents { } }
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -71,11 +76,12 @@ class DiGraphTest {
         assertNotNull(koin.get<GreetUseCase>())
         assertNotNull(koin.get<StoreFactory>())
 
-        // The parameterized component graph resolves and both children render.
+        // The parameterized component graph resolves and all children render.
         val context = DefaultComponentContext(lifecycle = LifecycleRegistry())
         val root = koin.get<RootComponent> { parametersOf(context) }
 
         assertEquals("Hello from shared Kotlin", root.hello.state.value.greeting)
         assertEquals(7L, root.counter.state.value.value)
+        assertEquals(SyncStatus.Synced, root.sync.state.value.status)
     }
 }

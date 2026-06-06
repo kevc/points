@@ -16,6 +16,8 @@ import com.points.core.presentation.hello.DefaultHelloComponent
 import com.points.core.presentation.hello.HelloComponent
 import com.points.core.presentation.root.DefaultRootComponent
 import com.points.core.presentation.root.RootComponent
+import com.points.core.presentation.sync.DefaultSyncComponent
+import com.points.core.presentation.sync.SyncComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import org.koin.core.module.Module
 import org.koin.core.parameter.parametersOf
@@ -53,11 +55,22 @@ val presentationModule = module {
         )
     }
 
+    factory<SyncComponent> { (componentContext: ComponentContext) ->
+        DefaultSyncComponent(
+            componentContext = componentContext,
+            storeFactory = get(),
+            observeSyncStatus = get(),
+            syncPointEvents = get(),
+            mainContext = get<CoroutineDispatcher>(named("main")),
+        )
+    }
+
     factory<RootComponent> { (componentContext: ComponentContext) ->
         DefaultRootComponent(
             componentContext,
             hello = { childContext -> get<HelloComponent> { parametersOf(childContext) } },
             counter = { childContext -> get<CounterComponent> { parametersOf(childContext) } },
+            sync = { childContext -> get<SyncComponent> { parametersOf(childContext) } },
         )
     }
 }
