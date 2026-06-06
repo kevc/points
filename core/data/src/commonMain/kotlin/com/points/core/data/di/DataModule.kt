@@ -5,11 +5,13 @@ import com.points.core.data.OfflineFirstPointRepository
 import com.points.core.data.decrementPoint
 import com.points.core.data.incrementPoint
 import com.points.core.data.observePointValue
+import com.points.core.data.syncPointEvents
 import com.points.core.database.LocalEventDataSource
 import com.points.core.domain.DecrementPoint
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObservePointValue
 import com.points.core.domain.PointRepository
+import com.points.core.domain.SyncPointEvents
 import com.points.core.network.PointsApiService
 import com.points.core.network.pointsHttpClient
 import kotlinx.coroutines.CoroutineDispatcher
@@ -37,6 +39,7 @@ val dataModule: Module = module {
     factory<IncrementPoint> { incrementPoint(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<DecrementPoint> { decrementPoint(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<ObservePointValue> { observePointValue(get()) }
+    factory<SyncPointEvents> { syncPointEvents(get(), get<CoroutineDispatcher>(named("io"))) }
 }
 
 /** Platform-supplied bindings: SQL driver factory, HTTP engine, and API base URL. */

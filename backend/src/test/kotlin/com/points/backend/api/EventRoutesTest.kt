@@ -6,6 +6,8 @@ import com.points.backend.db.DatabaseEventStorage
 import com.points.backend.plugins.h2DataSource
 import com.points.shared.contract.PointEventDto
 import com.points.shared.contract.PointValueDto
+import com.points.shared.contract.SyncRequestDto
+import com.points.shared.contract.SyncResponseDto
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
@@ -94,6 +96,50 @@ class EventRoutesTest {
 
         assertEquals(5L, client.get("/points/$type") { parameter("owner", "owner-a") }.body<PointValueDto>().value)
         assertEquals(3L, client.get("/points/$type") { parameter("owner", "owner-b") }.body<PointValueDto>().value)
+    }
+
+    @Test
+    fun syncUploadsPendingEventsAndReturnsTheOnesAClientIsMissing() = testApplication {
+        installPoints()
+        val client = createClient { install(ContentNegotiation) { json() } }
+        val type = "type-1"
+        fun event(id: String, delta: Long) =
+            PointEventDto(id, OWNER, type, delta, "device-a", "2026-06-04T12:00:00Z")
+
+        // Device A uploads two events from a fresh cursor and gets them back with the next cursor.
+        val first: SyncResponseDto = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, sinceSeq = 0, events = listOf(event("e1", 1), event("e2", 1))))
+        }.body()
+        assertEquals(listOf("e1", "e2"), first.events.map { it.id })
+        assertEquals(2L, first.events.size.toLong())
+
+        // Device B, caught up to A's cursor, uploads its own event and pulls only what's newer.
+        val second: SyncResponseDto = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, sinceSeq = first.nextSeq, events = listOf(event("e3", 1))))
+        }.body()
+        assertEquals(listOf("e3"), second.events.map { it.id })
+        assertEquals(3L, client.get("/points/$type") { parameter("owner", OWNER) }.body<PointValueDto>().value)
+    }
+
+    @Test
+    fun syncIsScopedToOwner() = testApplication {
+        installPoints()
+        val client = createClient { install(ContentNegotiation) { json() } }
+        fun event(id: String, owner: String) =
+            PointEventDto(id, owner, "type-1", 1, "device-a", "2026-06-04T12:00:00Z")
+
+        client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto("owner-b", 0, listOf(event("b1", "owner-b"))))
+        }
+        val forA: SyncResponseDto = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto("owner-a", 0, listOf(event("a1", "owner-a"))))
+        }.body()
+        // owner-a's pull never sees owner-b's event.
+        assertEquals(listOf("a1"), forA.events.map { it.id })
     }
 
     private companion object {

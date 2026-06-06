@@ -28,6 +28,8 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.ktor.client.mock)
+            // The sync tests stand up an in-memory fake of the /sync endpoint, (de)serializing the wire DTOs.
+            implementation(libs.kotlinx.serialization.json)
         }
         // Repository tests run on the JVM (Android local unit tests) against an in-memory JDBC driver.
         getByName("androidUnitTest").dependencies {
