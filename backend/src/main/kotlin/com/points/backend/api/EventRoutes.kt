@@ -12,6 +12,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.util.getOrFail
+import java.time.Instant
 
 /**
  * The M2 (un-authenticated) ledger endpoints, scoped by owner:
@@ -37,11 +38,13 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
     }
 }
 
+// The wire carries createdAt as an ISO-8601 string; the server stores it as epoch millis so it can be
+// ordered and range-queried. seq is left at its default — the database assigns the real value on insert.
 private fun PointEventDto.toStored() = StoredEvent(
     id = id,
     ownerId = ownerId,
     pointTypeId = pointTypeId,
     delta = delta,
     deviceId = deviceId,
-    createdAt = createdAt,
+    createdAt = Instant.parse(createdAt).toEpochMilli(),
 )
