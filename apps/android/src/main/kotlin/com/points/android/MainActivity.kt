@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.arkivanov.decompose.retainedComponent
+import com.points.android.ui.theme.PointsTheme
 import com.points.core.domain.SyncStatus
 import com.points.core.presentation.counter.CounterComponent
 import com.points.core.presentation.root.RootComponent
@@ -121,10 +122,4 @@ private fun SyncStatusIndicator(component: SyncComponent, modifier: Modifier = M
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-}
-
-/** Minimal Material3 theme wrapper. Expanded once design tokens are defined. */
-@Composable
-private fun PointsTheme(content: @Composable () -> Unit) {
-    MaterialTheme(content = content)
 }
