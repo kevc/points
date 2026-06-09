@@ -15,16 +15,22 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            Color.bg.ignoresSafeArea()
+
             VStack(spacing: 24) {
+                // Hero numeral: design type scale, tabular figures, clamped so it
+                // never overflows at large accessibility sizes.
                 Text("\(counterModel.value)")
-                    .font(.system(size: 72, weight: .bold))
+                    .font(.counter)
                     .monospacedDigit()
+                    .foregroundColor(.ink)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
                 HStack(spacing: 24) {
-                    Button("-") { root.counter.onDecrement() }
+                    Button("−") { root.counter.onDecrement() }
                     Button("+") { root.counter.onIncrement() }
                 }
-                .font(.largeTitle)
+                .font(.titleLg)
                 .buttonStyle(.bordered)
             }
             .frame(maxHeight: .infinity)
@@ -33,6 +39,8 @@ struct ContentView: View {
                 .padding(.top, 8)
         }
         .padding()
+        // Generic counter shows the default hue; a real point type sets its own.
+        .tint(PointHue.blue.color)
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 root.sync.onAppForegrounded() // reconcile when brought to the foreground
@@ -51,8 +59,8 @@ private struct SyncStatusView: View {
                 ProgressView().controlSize(.small)
             }
             Text(label)
-                .font(.footnote)
-                .foregroundColor(.secondary)
+                .font(.caption)
+                .foregroundColor(.inkDim)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("sync status: \(label)")
