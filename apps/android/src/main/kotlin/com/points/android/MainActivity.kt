@@ -4,11 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,20 +24,26 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.arkivanov.decompose.retainedComponent
+import com.points.core.domain.SyncStatus
 import com.points.core.presentation.counter.CounterComponent
 import com.points.core.presentation.root.RootComponent
+import com.points.core.presentation.sync.SyncComponent
 import org.koin.core.context.GlobalContext
 import org.koin.core.parameter.parametersOf
 
 /**
  * Single launcher activity. Builds the shared Decompose [RootComponent] (retained across configuration
- * changes) from Koin, and renders the counter — its value plus increment/decrement buttons.
+ * changes) from Koin, renders the counter, and shows an unobtrusive sync-status indicator. Each
+ * foreground (`ON_RESUME`) nudges a reconcile, in addition to the on-start trigger in the sync store.
  */
 class MainActivity : ComponentActivity() {
+
+    private lateinit var root: RootComponent
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val root = retainedComponent { componentContext ->
+        root = retainedComponent { componentContext ->
             GlobalContext.get().get<RootComponent> { parametersOf(componentContext) }
         }
 
@@ -44,10 +53,23 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    CounterScreen(root.counter)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SyncStatusIndicator(
+                            component = root.sync,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 16.dp),
+                        )
+                        CounterScreen(root.counter)
+                    }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        root.sync.onAppForegrounded() // reconcile when brought to the foreground
     }
 }
 
@@ -71,6 +93,33 @@ private fun CounterScreen(component: CounterComponent) {
             Button(onClick = component::onDecrement) { Text("-") }
             Button(onClick = component::onIncrement) { Text("+") }
         }
+    }
+}
+
+/** Compact, secondary sync-status row: a spinner while syncing, otherwise a short label. */
+@Composable
+private fun SyncStatusIndicator(component: SyncComponent, modifier: Modifier = Modifier) {
+    val state by component.state.subscribeAsState()
+    val label = when (state.status) {
+        SyncStatus.Idle -> "Idle"
+        SyncStatus.Syncing -> "Syncing…"
+        SyncStatus.Synced -> "Synced"
+        SyncStatus.Offline -> "Offline"
+        SyncStatus.Failed -> "Sync failed"
+    }
+    Row(
+        modifier = modifier.semantics { contentDescription = "sync status: $label" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (state.status == SyncStatus.Syncing) {
+            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
