@@ -27,6 +27,13 @@ class SyncStoreTest {
         override suspend fun invoke() { calls++ }
     }
 
+    /** A reconcile that always fails — stands in for an unreachable backend (the offline-first case). */
+    private class FailingSync : SyncPointEvents {
+        var calls = 0
+            private set
+        override suspend fun invoke(): Unit = run { calls++; throw RuntimeException("backend unreachable") }
+    }
+
     @Test
     fun reflectsObservedStatusInState() = runTest {
         val status = MutableStateFlow(SyncStatus.Idle)
@@ -68,6 +75,25 @@ class SyncStoreTest {
         assertEquals(1, sync.calls) // creation
 
         store.accept(SyncStore.Intent.Sync)
+        assertEquals(2, sync.calls)
+    }
+
+    @Test
+    fun failingReconcileDoesNotEscapeCreationOrIntent() = runTest {
+        // A throwing sync must not surface as an unhandled coroutine exception — on Kotlin/Native that
+        // would terminate the app. The store still constructs and still reflects observed status.
+        val sync = FailingSync()
+        val status = MutableStateFlow(SyncStatus.Offline)
+        val store = DefaultStoreFactory().syncStore(
+            observeSyncStatus = ObserveSyncStatus { status },
+            syncPointEvents = sync,
+            mainContext = UnconfinedTestDispatcher(),
+        )
+
+        assertEquals(1, sync.calls, "creation still attempts a reconcile")
+        assertEquals(SyncStatus.Offline, store.state.status, "status still flows from the coordinator")
+
+        store.accept(SyncStore.Intent.Sync) // must not throw either
         assertEquals(2, sync.calls)
     }
 }
