@@ -2,6 +2,7 @@ package com.points.backend
 
 import com.points.backend.api.configureEventRoutes
 import com.points.backend.db.DatabaseEventStorage
+import com.points.backend.plugins.configureLogging
 import com.points.backend.plugins.configureSerialization
 import com.points.backend.plugins.h2DataSource
 import io.ktor.server.application.Application
@@ -19,6 +20,7 @@ fun Application.module() {
 
 /** Installs plugins and routes against the given [storage]. Tests call this with their own container. */
 fun Application.configurePoints(storage: StorageContainer) {
+    configureLogging()
     configureSerialization()
     configureEventRoutes(storage)
 }
