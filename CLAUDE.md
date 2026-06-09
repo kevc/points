@@ -13,6 +13,12 @@ multi-device edits merging additively.
 - `core/domain/` — KMP, pure Kotlin (`commonMain` only). Entities, ports (interfaces), and `fun interface`
   use cases. **Zero** persistence/serialization/infrastructure imports.
 - `core/database/` — KMP. SQLDelight schema + queries for the local append-only event ledger.
+  - **Schema changes:** on any change to a `.sq` schema, **bump `PointsDatabase`'s version and add the
+    SQLDelight migration (`.sqm`)** — a `.sq` change without a version bump leaves existing installs on the
+    old tables, which hard-crashes on launch (e.g. `provision()`'s `INSERT INTO local_state` against a DB
+    lacking that table → a Kotlin/Native `trapOnUndeclaredException` in `createRootComponent`). One-time
+    exception: the pre-#48 gap (schema reworked without a bump) is **not** back-filled — reinstall / wipe app
+    data once to clear a `points.db` from before that change.
 - `core/network/` — KMP. Ktor client + API service. Depends on `shared/contract`.
 - `core/data/` — KMP. Repository implementations (combine database + network) and offline-first sync.
 - `core/presentation/` — KMP. Decompose components + MVIKotlin stores (shared UI logic + navigation).
