@@ -120,12 +120,18 @@ class OfflineFirstPointRepositoryTest {
     }
 
     @Test
-    fun appendWhileOnlinePushesAndClearsPending() = runTest {
+    fun appendPersistsAsPendingAndSyncPushesToOtherDevices() = runTest {
         val backend = FakeSyncBackend()
         val local = localFor()
-        repository(apiFor(backend), local).append(typeId, 2)
+        val repo = repository(apiFor(backend), local)
+        repo.append(typeId, 2)
 
-        assertTrue(local.pendingEvents().isEmpty(), "online append should be confirmed by sync")
+        // append only persists — pushing is the SyncCoordinator's job (it observes the pending count).
+        assertEquals(1, local.pendingEvents().size, "append leaves the event pending; it does not auto-push")
+
+        repo.sync() // the coordinator drives this reactively in the app; here we invoke it directly
+        assertTrue(local.pendingEvents().isEmpty(), "sync pushes and clears pending")
+
         // A second device on the same owner pulls the pushed event.
         val other = localFor(local.ownerId)
         repository(apiFor(backend), other).sync()
@@ -138,7 +144,7 @@ class OfflineFirstPointRepositoryTest {
         val local = localFor()
         val repo = repository(apiFor(backend), local)
 
-        repo.append(typeId, 7) // offline: auto-sync fails, event stays pending
+        repo.append(typeId, 7) // event stays pending until a sync pushes it
         assertEquals(1, local.pendingEvents().size)
         assertEquals(7L, repo.observeValue(typeId).first())
 

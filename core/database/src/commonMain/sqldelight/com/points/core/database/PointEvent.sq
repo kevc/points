@@ -39,6 +39,12 @@ SELECT * FROM point_event WHERE owner_id = ? AND point_type_id = ? ORDER BY crea
 pendingEvents:
 SELECT * FROM point_event WHERE owner_id = ? AND pending = 1 ORDER BY created_at, id;
 
+-- Count of the owner's pending events. Reactive: drives the sync indicator so local edits that haven't
+-- reached the server (e.g. an unreachable backend while the OS network is up) are reflected, not masked
+-- behind a stale "Synced".
+pendingCount:
+SELECT COUNT(*) FROM point_event WHERE owner_id = ? AND pending = 1;
+
 -- Mark events confirmed by the backend (after a successful sync push).
 clearPending:
 UPDATE point_event SET pending = 0 WHERE owner_id = ? AND id IN ?;

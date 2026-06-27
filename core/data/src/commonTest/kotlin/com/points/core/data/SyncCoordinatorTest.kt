@@ -6,6 +6,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -40,6 +41,24 @@ class SyncCoordinatorTest {
         }
     }
 
+    /** Reconcile whose reachability can be toggled mid-test — succeeds while [reachable], else throws. */
+    private class ToggleableSync(var reachable: Boolean = true) : SyncPointEvents {
+        var calls = 0
+            private set
+        override suspend fun invoke() {
+            calls++
+            if (!reachable) error("backend unreachable")
+        }
+    }
+
+    /** Builds a coordinator, defaulting [pending] to a steady zero for the connectivity-only tests. */
+    private fun coordinator(
+        connectivity: ConnectivityMonitor,
+        sync: SyncPointEvents,
+        pending: Flow<Long> = MutableStateFlow(0L),
+        backoff: BackoffPolicy = BackoffPolicy(),
+    ): SyncCoordinator = SyncCoordinator(connectivity, pending, sync, backoff)
+
     /**
      * Collects [SyncCoordinator.status] into a list on an unconfined dispatcher bound to the test scheduler:
      * the unconfined dispatcher runs each transition eagerly, while sharing [TestScope.testScheduler] keeps the
@@ -55,7 +74,7 @@ class SyncCoordinatorTest {
     @Test
     fun syncsOnceOnStartWhenOnline() = runTest {
         val sync = RecordingSync()
-        val (statuses, job) = collectStatus(SyncCoordinator(FakeConnectivity(true), sync))
+        val (statuses, job) = collectStatus(coordinator(FakeConnectivity(true), sync))
 
         advanceUntilIdle()
 
@@ -67,7 +86,7 @@ class SyncCoordinatorTest {
     @Test
     fun offlineReportsOfflineAndDoesNotSync() = runTest {
         val sync = RecordingSync()
-        val (statuses, job) = collectStatus(SyncCoordinator(FakeConnectivity(false), sync))
+        val (statuses, job) = collectStatus(coordinator(FakeConnectivity(false), sync))
 
         advanceUntilIdle()
 
@@ -80,7 +99,7 @@ class SyncCoordinatorTest {
     fun offlineToOnlineTriggersSyncAndStayingOnlineDoesNot() = runTest {
         val sync = RecordingSync()
         val connectivity = FakeConnectivity(false)
-        val (statuses, job) = collectStatus(SyncCoordinator(connectivity, sync))
+        val (statuses, job) = collectStatus(coordinator(connectivity, sync))
         advanceUntilIdle()
         assertEquals(0, sync.calls)
 
@@ -100,7 +119,7 @@ class SyncCoordinatorTest {
     fun reconnectAfterDropTriggersAnotherSync() = runTest {
         val sync = RecordingSync()
         val connectivity = FakeConnectivity(true)
-        val (_, job) = collectStatus(SyncCoordinator(connectivity, sync))
+        val (_, job) = collectStatus(coordinator(connectivity, sync))
         advanceUntilIdle()
         assertEquals(1, sync.calls)
 
@@ -116,10 +135,10 @@ class SyncCoordinatorTest {
     @Test
     fun failingSyncRetriesWithGrowingDelayThenSucceeds() = runTest {
         val sync = RecordingSync(failuresBeforeSuccess = 3)
-        val coordinator = SyncCoordinator(
+        val coordinator = coordinator(
             FakeConnectivity(true),
             sync,
-            BackoffPolicy(base = 1.seconds, max = 60.seconds, factor = 2.0),
+            backoff = BackoffPolicy(base = 1.seconds, max = 60.seconds, factor = 2.0),
         )
         val (statuses, job) = collectStatus(coordinator)
 
@@ -138,10 +157,10 @@ class SyncCoordinatorTest {
     @Test
     fun backoffDelayIsCappedAtMax() = runTest {
         val sync = RecordingSync(failuresBeforeSuccess = 4)
-        val coordinator = SyncCoordinator(
+        val coordinator = coordinator(
             FakeConnectivity(true),
             sync,
-            BackoffPolicy(base = 1.seconds, max = 2.seconds, factor = 2.0),
+            backoff = BackoffPolicy(base = 1.seconds, max = 2.seconds, factor = 2.0),
         )
         val (_, job) = collectStatus(coordinator)
 
@@ -157,7 +176,7 @@ class SyncCoordinatorTest {
     fun successResetsBackoffForTheNextReconnect() = runTest {
         val sync = RecordingSync(failuresBeforeSuccess = 1) // first pass: fail once (1s), then succeed
         val connectivity = FakeConnectivity(true)
-        val (_, job) = collectStatus(SyncCoordinator(connectivity, sync, BackoffPolicy(base = 1.seconds)))
+        val (_, job) = collectStatus(coordinator(connectivity, sync, backoff = BackoffPolicy(base = 1.seconds)))
         advanceUntilIdle()
         assertEquals(2, sync.calls)
         val afterFirstPass = testScheduler.currentTime // 1s spent on the single backoff
@@ -178,7 +197,7 @@ class SyncCoordinatorTest {
     fun droppingOfflineMidRetryFlipsToOffline() = runTest {
         val sync = RecordingSync(failuresBeforeSuccess = 100) // keeps failing while online
         val connectivity = FakeConnectivity(true)
-        val (statuses, job) = collectStatus(SyncCoordinator(connectivity, sync, BackoffPolicy(base = 10.seconds)))
+        val (statuses, job) = collectStatus(coordinator(connectivity, sync, backoff = BackoffPolicy(base = 10.seconds)))
 
         // The unconfined collector runs the first attempt eagerly: it fails and parks on a 10s backoff.
         assertEquals(SyncStatus.Failed, statuses.last())
@@ -188,6 +207,74 @@ class SyncCoordinatorTest {
 
         assertEquals(SyncStatus.Offline, statuses.last(), "a disconnect cancels the in-flight retry loop")
         assertTrue(sync.calls in 1..2, "the parked retry must not keep firing once offline")
+        job.cancel()
+    }
+
+    @Test
+    fun pendingEditWhileOnlinePushesAndSettlesBackToSynced() = runTest {
+        val pending = MutableStateFlow(0L)
+        val sync = RecordingSync()
+        val (statuses, job) = collectStatus(coordinator(FakeConnectivity(true), sync, pending))
+        advanceUntilIdle()
+        assertEquals(1, sync.calls, "on-connect pull")
+        assertEquals(SyncStatus.Synced, statuses.last())
+
+        // A local edit lands as pending; the coordinator pushes it (its bump alone drives the sync).
+        pending.value = 1
+        advanceUntilIdle()
+        assertEquals(2, sync.calls, "the pending edit drives exactly one push")
+        assertEquals(SyncStatus.Synced, statuses.last())
+
+        // A successful push clears pending; the count back at zero settles to Synced with no extra round-trip.
+        pending.value = 0
+        advanceUntilIdle()
+        assertEquals(2, sync.calls, "a pending count back at zero does not re-sync")
+        assertEquals(SyncStatus.Synced, statuses.last())
+        job.cancel()
+    }
+
+    @Test
+    fun pendingEditWithUnreachableBackendSurfacesFailedNotStaleSynced() = runTest {
+        // Repro of #79: app already running, OS network up, backend stopped, then a local edit. The stale
+        // "Synced" must give way to "Sync failed" — matching what a fresh launch already shows.
+        val pending = MutableStateFlow(0L)
+        val sync = ToggleableSync(reachable = true)
+        val (statuses, job) = collectStatus(
+            coordinator(FakeConnectivity(true), sync, pending, backoff = BackoffPolicy(base = 10.seconds)),
+        )
+        advanceUntilIdle()
+        assertEquals(SyncStatus.Synced, statuses.last(), "the on-connect pull reconciles while the backend is up")
+
+        // Backend goes away (OS still online); the edit can't be pushed. The unconfined collector runs the
+        // push attempt eagerly: it fails and parks on the 10s backoff.
+        sync.reachable = false
+        pending.value = 1
+        assertEquals(
+            SyncStatus.Failed,
+            statuses.last(),
+            "an unsynced edit against an unreachable backend reads as Failed, not a stale Synced",
+        )
+        assertTrue(sync.calls >= 2, "the on-connect pull plus at least one push attempt for the edit")
+        job.cancel()
+    }
+
+    @Test
+    fun recoveringBackendClearsPendingAndReturnsToSynced() = runTest {
+        val pending = MutableStateFlow(0L)
+        val sync = ToggleableSync(reachable = false)
+        val (statuses, job) = collectStatus(
+            coordinator(FakeConnectivity(true), sync, pending, backoff = BackoffPolicy(base = 1.seconds)),
+        )
+        pending.value = 1 // edit while the backend is down → Failed + retry
+        assertEquals(SyncStatus.Failed, statuses.last())
+
+        // Backend recovers; a retry succeeds and the (now cleared) pending count settles to Synced.
+        sync.reachable = true
+        advanceUntilIdle()
+        assertEquals(SyncStatus.Synced, statuses.last())
+        pending.value = 0
+        advanceUntilIdle()
+        assertEquals(SyncStatus.Synced, statuses.last())
         job.cancel()
     }
 }
