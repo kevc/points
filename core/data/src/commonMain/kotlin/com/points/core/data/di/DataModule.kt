@@ -44,8 +44,9 @@ val dataModule: Module = module {
     factory<ObservePointValue> { observePointValue(get()) }
     factory<SyncPointEvents> { syncPointEvents(get(), get<CoroutineDispatcher>(named("io"))) }
     // One coordinator per app: it holds the sync status stream all observers share. `ConnectivityMonitor`
-    // is supplied by platformDataModule (T21).
-    single { SyncCoordinator(get(), get()) }
+    // is supplied by platformDataModule (T21); the pending-count flow comes from the local ledger so an
+    // append that can't reach the server surfaces as unsynced rather than a stale "Synced".
+    single { SyncCoordinator(get(), get<LocalEventDataSource>().observePendingCount(), get()) }
     factory<ObserveSyncStatus> { observeSyncStatus(get()) }
 }
 

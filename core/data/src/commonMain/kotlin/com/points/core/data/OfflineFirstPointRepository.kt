@@ -15,8 +15,10 @@ import kotlin.uuid.Uuid
 /**
  * Offline-first [PointRepository]. Every increment/decrement is written to the local ledger first (the
  * source of truth for display) and marked pending; the observed value comes from the local ledger so the
- * UI updates immediately, online or off. [append] then kicks a best-effort [sync] — a missing or failing
- * network is not an error, since the event stays pending and reconciles on the next sync.
+ * UI updates immediately, online or off. [append] does *not* sync — it only persists. Pushing the pending
+ * event is the `SyncCoordinator`'s job: it observes the pending count and drives [sync], so the single sync
+ * driver also owns the visible [com.points.core.domain.SyncStatus] (an append's push failure can no longer
+ * be lost behind a stale "Synced", which is what happened when [append] swallowed its own best-effort sync).
  *
  * [sync] is the batch protocol: it uploads pending events and pulls the ones this device is missing
  * (`seq` greater than the stored cursor), unions them in, and advances the cursor. Because the value is
@@ -37,8 +39,7 @@ class OfflineFirstPointRepository(
             deviceId = local.deviceId,
             createdAt = clock.now(),
         )
-        local.insert(event)
-        runCatching { sync() } // best-effort; offline leaves the event pending for the next pass
+        local.insert(event) // persist as pending; the SyncCoordinator observes the bump and drives the push
         return event
     }
 

@@ -15,22 +15,36 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Headless driver for offline-first sync: it owns *when* to reconcile and the retry policy, and exposes the
  * resulting [SyncStatus] as a cold [Flow]. No UI and no real network — connectivity arrives via the injected
- * [ConnectivityMonitor] and the reconcile itself is the existing [SyncPointEvents] use case, so the whole
- * thing is exercisable with a fake flow + fake use case + virtual time.
+ * [ConnectivityMonitor], the count of unsynced local edits via [pending], and the reconcile itself is the
+ * existing [SyncPointEvents] use case, so the whole thing is exercisable with fake flows + a fake use case +
+ * virtual time.
  *
- * Behavior, per collected connectivity transition (deduped, so a repeated `online` value is ignored):
- * - **offline** → emit [SyncStatus.Offline] and idle until connectivity returns;
- * - **online** (first emission = app start, and every offline→online transition) → run a reconcile pass,
- *   emitting [SyncStatus.Syncing] then [SyncStatus.Synced] on success. On failure emit [SyncStatus.Failed]
- *   and retry with [BackoffPolicy] exponential backoff (capped) while still online; a success ends the pass
- *   and resets the backoff (the next transition starts fresh). `collectLatest` cancels an in-flight pass the
- *   instant connectivity drops, so a mid-retry disconnect flips straight to [SyncStatus.Offline].
+ * It is the *single* driver of sync: a local append simply lands in the ledger as pending, and the bump in
+ * [pending] reactively drives the next pass here. (The repository no longer fires its own per-append sync —
+ * those best-effort failures never reached this status stream, which is exactly how an already-running app
+ * could sit on a stale "Synced" with pending events that weren't reaching an unreachable server.)
+ *
+ * Behavior while **online**, re-evaluated on every [pending] change (deduped):
+ * - on connect, run an initial reconcile pass even with nothing pending — sync also *pulls* other devices'
+ *   edits, not just pushes ours;
+ * - a non-zero pending count (a local edit that isn't on the server yet) runs a reconcile pass: emit
+ *   [SyncStatus.Syncing], then [SyncStatus.Synced] on success. On failure emit [SyncStatus.Failed] and retry
+ *   with [BackoffPolicy] backoff while still online — so an unreachable backend now surfaces as "Sync failed"
+ *   (matching a fresh launch) instead of a stale "Synced";
+ * - once the initial pass has pulled, a pending count back at zero is simply [SyncStatus.Synced] with no
+ *   redundant network round-trip.
+ *
+ * While **offline** it emits [SyncStatus.Offline] and idles until connectivity returns. `collectLatest`
+ * cancels an in-flight pass the instant connectivity drops (→ [SyncStatus.Offline]) or a new edit arrives
+ * (→ restart the pass). `distinctUntilChanged` on the output collapses the duplicate terminal states the
+ * reactive re-evaluation can produce.
  *
  * Main-safety is already owned by [SyncPointEvents] (its factory hops to `named("io")`), so the coordinator
  * adds no dispatcher of its own.
  */
 class SyncCoordinator(
     private val connectivity: ConnectivityMonitor,
+    private val pending: Flow<Long>,
     private val sync: SyncPointEvents,
     private val backoff: BackoffPolicy = BackoffPolicy(),
 ) {
@@ -40,19 +54,28 @@ class SyncCoordinator(
                 send(SyncStatus.Offline)
                 return@collectLatest
             }
-            var attempt = 0
-            while (true) {
-                send(SyncStatus.Syncing)
-                val result = runCatching { sync() }
-                if (result.isSuccess) {
-                    send(SyncStatus.Synced)
-                    return@collectLatest // hold Synced until the next offline→online transition; backoff resets
+            // Reset per connect: force one reconcile pass on (re)connect to pull, then track the pending set.
+            var pulledOnConnect = false
+            pending.distinctUntilChanged().collectLatest { pendingCount ->
+                if (pendingCount == 0L && pulledOnConnect) {
+                    send(SyncStatus.Synced) // reconciled: nothing pending and we've already pulled this session
+                    return@collectLatest
                 }
-                send(SyncStatus.Failed)
-                delay(backoff.delayFor(++attempt))
+                var attempt = 0
+                while (true) {
+                    send(SyncStatus.Syncing)
+                    val result = runCatching { sync() }
+                    if (result.isSuccess) {
+                        pulledOnConnect = true
+                        send(SyncStatus.Synced) // success clears pending; the next emission settles to Synced
+                        return@collectLatest
+                    }
+                    send(SyncStatus.Failed)
+                    delay(backoff.delayFor(++attempt))
+                }
             }
         }
-    }
+    }.distinctUntilChanged()
 }
 
 /**

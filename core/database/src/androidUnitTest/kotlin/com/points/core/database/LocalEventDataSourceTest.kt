@@ -84,6 +84,24 @@ class LocalEventDataSourceTest {
     }
 
     @Test
+    fun observePendingCountReflectsInsertsAndClears() = runTest {
+        val ds = newDataSource()
+        assertEquals(0L, ds.observePendingCount().first())
+
+        val a = Uuid.random()
+        ds.insert(event(1, id = a))
+        ds.insert(event(1))
+        assertEquals(2L, ds.observePendingCount().first())
+
+        ds.clearPending(listOf(a.toString()))
+        assertEquals(1L, ds.observePendingCount().first())
+
+        // Events pulled from the server are already confirmed, so they never count as pending.
+        ds.applySynced(event(1))
+        assertEquals(1L, ds.observePendingCount().first())
+    }
+
+    @Test
     fun syncedEventsAreNotPending() {
         val ds = newDataSource()
         ds.applySynced(event(1))

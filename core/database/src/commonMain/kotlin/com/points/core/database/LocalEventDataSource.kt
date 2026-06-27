@@ -82,6 +82,14 @@ class LocalEventDataSource(
         if (ids.isNotEmpty()) queries.clearPending(ownerId, ids)
     }
 
+    /**
+     * Emits this owner's count of pending (not-yet-synced) events, re-emitting whenever the ledger changes.
+     * The sync coordinator collects this so an append while the server is unreachable surfaces as an
+     * unsynced state instead of leaving the indicator stuck on a stale "Synced".
+     */
+    fun observePendingCount(): Flow<Long> =
+        queries.pendingCount(ownerId).asFlow().mapToOne(queryContext)
+
     /** The highest server `seq` this install has pulled — the sync pull cursor. */
     fun syncCursor(): Long = stateQueries.selectState().executeAsOne().sync_cursor
 
