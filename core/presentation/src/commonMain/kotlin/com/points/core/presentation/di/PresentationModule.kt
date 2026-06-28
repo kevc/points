@@ -11,6 +11,8 @@ import com.points.core.domain.GreetUseCase
 import com.points.core.domain.greetUseCase
 import com.points.core.presentation.counter.CounterComponent
 import com.points.core.presentation.counter.DefaultCounterComponent
+import com.points.core.presentation.edit.CreateEditComponent
+import com.points.core.presentation.edit.DefaultCreateEditComponent
 import com.points.core.presentation.hello.DefaultHelloComponent
 import com.points.core.presentation.hello.HelloComponent
 import com.points.core.presentation.home.DefaultHomeComponent
@@ -65,6 +67,21 @@ val presentationModule = module {
             observeValue = get(),
             mainContext = get<CoroutineDispatcher>(named("main")),
             onBackPressed = onBack,
+        )
+    }
+
+    factory<CreateEditComponent> {
+            (componentContext: ComponentContext, editId: Uuid?, onSaved: () -> Unit, onCancel: () -> Unit) ->
+        DefaultCreateEditComponent(
+            componentContext = componentContext,
+            storeFactory = get(),
+            editId = editId,
+            create = get(),
+            edit = get(),
+            observeTypes = get(),
+            mainContext = get<CoroutineDispatcher>(named("main")),
+            onSaved = onSaved,
+            onCancelled = onCancel,
         )
     }
 
