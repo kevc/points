@@ -60,30 +60,35 @@ private struct HomeView: View {
     ]
 
     var body: some View {
+        let tiles = model.state.tiles
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Points").font(.titleLg).foregroundColor(.ink)
-                    Text("\(model.tiles.count) things, quietly counting")
+                    Text("\(tiles.count) things, quietly counting")
                         .font(.bodyUI).foregroundColor(.inkDim)
                 }
                 .padding(.horizontal, 22)
                 .padding(.top, 24)
                 .padding(.bottom, 8)
 
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(model.tiles.indices, id: \.self) { index in
-                            let tile = model.tiles[index]
-                            TileView(
-                                tile: tile,
-                                onIncrement: { component.onIncrement(pointTypeId: tile.id, step: tile.step) },
-                                onDecrement: { component.onDecrement(pointTypeId: tile.id, step: tile.step) }
-                            )
-                            .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
+                if model.state.loaded && tiles.isEmpty {
+                    EmptyStateView { component.onQuickCreate(suggestion: $0) }
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 14) {
+                            ForEach(tiles.indices, id: \.self) { index in
+                                let tile = tiles[index]
+                                TileView(
+                                    tile: tile,
+                                    onIncrement: { component.onIncrement(pointTypeId: tile.id, step: tile.step) },
+                                    onDecrement: { component.onDecrement(pointTypeId: tile.id, step: tile.step) }
+                                )
+                                .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
+                            }
                         }
+                        .padding(16)
                     }
-                    .padding(16)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -99,6 +104,33 @@ private struct HomeView: View {
             }
             .padding(20)
         }
+    }
+}
+
+/// Gentle first-run prompt: a question + starter chips that quick-create a point type.
+private struct EmptyStateView: View {
+    let onQuickCreate: (Suggestion) -> Void
+    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("What would you like to count?")
+                .font(.titleLg).foregroundColor(.ink).multilineTextAlignment(.center)
+            Text("Pick one to start — you can rename or change it any time. Nothing here is ever permanent.")
+                .font(.bodyUI).foregroundColor(.inkDim).multilineTextAlignment(.center)
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(pointSuggestions, id: \.name) { suggestion in
+                    Button { onQuickCreate(suggestion) } label: {
+                        Text(suggestion.name).frame(maxWidth: .infinity).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(PointHue.forDegrees(Int(suggestion.hue)).color)
+                }
+            }
+            .padding(.top, 8)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -198,14 +230,14 @@ private struct RingView<Content: View>: View {
 }
 
 private final class HomeModel: ObservableObject {
-    @Published var tiles: [HomeTile]
+    @Published var state: HomeStoreState
     private var cancellation: DecomposeCancellation?
 
     init(_ component: HomeComponent) {
-        let state = component.state
-        tiles = state.value.tiles
-        cancellation = state.subscribe { [weak self] newState in
-            self?.tiles = newState.tiles
+        let s = component.state
+        state = s.value
+        cancellation = s.subscribe { [weak self] newState in
+            self?.state = newState
         }
     }
 
