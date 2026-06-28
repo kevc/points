@@ -36,6 +36,8 @@ struct ContentView: View {
             HomeView(component: home.component)
         } else if let detail = child as? RootComponentChildDetail {
             CounterView(component: detail.component)
+        } else if let create = child as? RootComponentChildCreate {
+            CreateEditView(component: create.component)
         }
     }
 }
@@ -57,28 +59,41 @@ private struct HomeView: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Points").font(.titleLg).foregroundColor(.ink)
-                Text("\(model.tiles.count) things, quietly counting")
-                    .font(.bodyUI).foregroundColor(.inkDim)
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 24)
-            .padding(.bottom, 8)
-
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(model.tiles.indices, id: \.self) { index in
-                        let tile = model.tiles[index]
-                        TileView(tile: tile)
-                            .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
-                    }
+        ZStack(alignment: .bottomTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Points").font(.titleLg).foregroundColor(.ink)
+                    Text("\(model.tiles.count) things, quietly counting")
+                        .font(.bodyUI).foregroundColor(.inkDim)
                 }
-                .padding(16)
+                .padding(.horizontal, 22)
+                .padding(.top, 24)
+                .padding(.bottom, 8)
+
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 14) {
+                        ForEach(model.tiles.indices, id: \.self) { index in
+                            let tile = model.tiles[index]
+                            TileView(tile: tile)
+                                .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
+                        }
+                    }
+                    .padding(16)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            Button(action: { component.onCreate() }) {
+                Label("New", systemImage: "plus")
+                    .font(.bodyUI)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(Color.ink)
+                    .foregroundColor(.bg)
+                    .clipShape(Capsule())
+            }
+            .padding(20)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -209,6 +224,9 @@ private struct CounterView: View {
                     .font(.bodyUI)
                     .foregroundColor(.inkDim)
                 Spacer()
+                Button("Edit") { component.onEdit() }
+                    .font(.bodyUI)
+                    .foregroundColor(.inkDim)
             }
             .padding()
 
@@ -290,6 +308,155 @@ private final class SyncModel: ObservableObject {
         status = state.value.status
         cancellation = state.subscribe { [weak self] newState in
             self?.status = newState.status
+        }
+    }
+
+    deinit {
+        cancellation?.cancel()
+    }
+}
+
+// MARK: - Create / edit form
+
+private struct CreateEditView: View {
+    let component: CreateEditComponent
+    @StateObject private var model: CreateEditModel
+
+    init(component: CreateEditComponent) {
+        self.component = component
+        _model = StateObject(wrappedValue: CreateEditModel(component))
+    }
+
+    private let hues: [Int32] = [152, 215, 285, 40, 18, 330, 95, 250]
+
+    var body: some View {
+        let s = model.state
+        VStack(spacing: 0) {
+            HStack {
+                Button("Cancel") { component.onCancel() }.foregroundColor(.inkDim)
+                Spacer()
+                Text(s.editing ? "Edit point" : "New point").foregroundColor(.ink)
+                Spacer()
+                Button("Save") { component.onSave() }
+            }
+            .font(.bodyUI)
+            .padding()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    field("What are you counting?") {
+                        TextField("e.g. Days smoke-free", text: Binding(
+                            get: { s.name },
+                            set: { component.onName(value: $0) }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                    }
+
+                    field("Color — shows up in its charts") {
+                        HStack(spacing: 12) {
+                            ForEach(hues, id: \.self) { hue in
+                                Circle()
+                                    .fill(PointHue.forDegrees(Int(hue)).color)
+                                    .frame(width: 34, height: 34)
+                                    .overlay(Circle().stroke(Color.ink, lineWidth: s.hue == hue ? 3 : 0))
+                                    .onTapGesture { component.onHue(hue: hue) }
+                            }
+                        }
+                    }
+
+                    field("How is it counted?") {
+                        HStack(spacing: 12) {
+                            modeCard("Tally up", "A running total that climbs.", selected: s.mode == .cumulative) {
+                                component.onMode(mode: .cumulative)
+                            }
+                            modeCard("Daily", "Resets gently each morning.", selected: s.mode == .daily) {
+                                component.onMode(mode: .daily)
+                            }
+                        }
+                    }
+
+                    field("Step — how much each tap adds") {
+                        stepper(value: "+\(s.step)", onMinus: { component.onStepDown() }, onPlus: { component.onStepUp() })
+                    }
+
+                    if s.mode == .daily {
+                        field("Gentle daily target (optional)") {
+                            stepper(
+                                value: s.target > 0 ? "\(s.target)" : "Off",
+                                onMinus: { component.onTargetDown() },
+                                onPlus: { component.onTargetUp() }
+                            )
+                            Text(s.target > 0
+                                ? "Counts up to this — never turns red if you go over."
+                                : "No target — just a gentle daily tally.")
+                                .font(.caption).foregroundColor(.inkDim)
+                        }
+                    }
+
+                    if s.mode == .cumulative {
+                        field("Tone") {
+                            HStack(spacing: 12) {
+                                modeCard("Climbing", "More feels like progress.", selected: s.goal == .up) {
+                                    component.onGoal(goal: .up)
+                                }
+                                modeCard("Easing", "Just noticing — no red.", selected: s.goal == .down) {
+                                    component.onGoal(goal: .down)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(22)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.bg)
+    }
+
+    @ViewBuilder
+    private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(label).font(.caption).foregroundColor(.inkDim)
+            content()
+        }
+    }
+
+    private func modeCard(_ title: String, _ subtitle: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.bodyUI).foregroundColor(.ink)
+                Text(subtitle).font(.caption).foregroundColor(.inkDim)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(selected ? Color.ink : Color.line, lineWidth: selected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func stepper(value: String, onMinus: @escaping () -> Void, onPlus: @escaping () -> Void) -> some View {
+        HStack(spacing: 16) {
+            Button("−", action: onMinus).buttonStyle(.bordered)
+            Text(value).font(.titleLg).foregroundColor(.ink)
+            Button("+", action: onPlus).buttonStyle(.bordered)
+        }
+    }
+}
+
+private final class CreateEditModel: ObservableObject {
+    @Published var state: CreateEditStoreState
+    private var cancellation: DecomposeCancellation?
+
+    init(_ component: CreateEditComponent) {
+        let s = component.state
+        state = s.value
+        cancellation = s.subscribe { [weak self] newState in
+            self?.state = newState
         }
     }
 

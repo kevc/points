@@ -4,6 +4,7 @@ package com.points.android.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,26 +35,34 @@ import com.points.core.presentation.home.HomeTile
 @Composable
 fun HomeScreen(component: HomeComponent, modifier: Modifier = Modifier) {
     val state by component.state.subscribeAsState()
-    Column(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 24.dp, bottom = 8.dp)) {
-            Text("Points", style = MaterialTheme.typography.headlineLarge)
-            Text(
-                text = "${state.tiles.size} things, quietly counting",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            items(state.tiles, key = { it.id.toString() }) { tile ->
-                Tile(tile = tile, onClick = { component.onTileClicked(tile.id) })
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 24.dp, bottom = 8.dp)) {
+                Text("Points", style = MaterialTheme.typography.headlineLarge)
+                Text(
+                    text = "${state.tiles.size} things, quietly counting",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                items(state.tiles, key = { it.id.toString() }) { tile ->
+                    Tile(tile = tile, onClick = { component.onTileClicked(tile.id) })
+                }
             }
         }
+        ExtendedFloatingActionButton(
+            onClick = component::onCreate,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            text = { Text("New") },
+            icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
+        )
     }
 }
 

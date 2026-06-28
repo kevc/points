@@ -32,6 +32,7 @@ interface CounterComponent {
     fun onIncrement()
     fun onDecrement()
     fun onBack()
+    fun onEdit()
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -44,6 +45,7 @@ class DefaultCounterComponent(
     observeValue: ObservePointValue,
     mainContext: CoroutineContext,
     private val onBackPressed: () -> Unit = {},
+    private val onEditRequested: () -> Unit = {},
 ) : CounterComponent, ComponentContext by componentContext {
 
     private val store = instanceKeeper.getStore {
@@ -63,4 +65,6 @@ class DefaultCounterComponent(
     override fun onDecrement() = store.accept(CounterStore.Intent.Decrement)
 
     override fun onBack() = onBackPressed()
+
+    override fun onEdit() = onEditRequested()
 }
