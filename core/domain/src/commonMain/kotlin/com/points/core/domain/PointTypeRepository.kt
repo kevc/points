@@ -28,6 +28,9 @@ interface PointTypeRepository {
     /** Tombstones the type [id] (soft delete — sets `deletedAt`, never erases). Idempotent. */
     suspend fun delete(id: Uuid)
 
+    /** Clears the tombstone on type [id] (the undo for [delete]), re-stamping `updatedAt`. Idempotent. */
+    suspend fun restore(id: Uuid)
+
     /** Emits the active (non-tombstoned) types, re-emitting whenever the catalog changes. */
     fun observeTypes(): Flow<List<PointType>>
 }

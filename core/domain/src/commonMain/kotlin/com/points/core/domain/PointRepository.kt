@@ -16,6 +16,9 @@ interface PointRepository {
     /** Appends one increment/decrement and returns the persisted event. */
     suspend fun append(pointTypeId: Uuid, delta: Long): PointEvent
 
+    /** One-shot current value (`SUM(delta)`) for [pointTypeId] — used to compute a reset's compensating delta. */
+    suspend fun currentValue(pointTypeId: Uuid): Long
+
     /** Emits the current value (`SUM(delta)`) for [pointTypeId], re-emitting whenever it changes. */
     fun observeValue(pointTypeId: Uuid): Flow<Long>
 

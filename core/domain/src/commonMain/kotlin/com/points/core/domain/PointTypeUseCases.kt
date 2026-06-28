@@ -29,6 +29,12 @@ fun interface DeletePointType {
     suspend operator fun invoke(id: Uuid)
 }
 
+/** Un-tombstones a point type — the undo for [DeletePointType] (clears `deletedAt`). Idempotent. */
+@OptIn(ExperimentalUuidApi::class)
+fun interface RestorePointType {
+    suspend operator fun invoke(id: Uuid)
+}
+
 /** Streams the active (non-tombstoned) point types. */
 fun interface ObservePointTypes {
     operator fun invoke(): Flow<List<PointType>>
