@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PointsKit
 
 struct ContentView: View {
@@ -74,8 +75,12 @@ private struct HomeView: View {
                     LazyVGrid(columns: columns, spacing: 14) {
                         ForEach(model.tiles.indices, id: \.self) { index in
                             let tile = model.tiles[index]
-                            TileView(tile: tile)
-                                .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
+                            TileView(
+                                tile: tile,
+                                onIncrement: { component.onIncrement(pointTypeId: tile.id, step: tile.step) },
+                                onDecrement: { component.onDecrement(pointTypeId: tile.id, step: tile.step) }
+                            )
+                            .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
                         }
                     }
                     .padding(16)
@@ -99,10 +104,13 @@ private struct HomeView: View {
 
 private struct TileView: View {
     let tile: HomeTile
+    let onIncrement: () -> Void
+    let onDecrement: () -> Void
 
     var body: some View {
+        let hue = PointHue.forDegrees(Int(tile.hue))
         VStack(spacing: 12) {
-            RingView(ring: tile.ring, hue: PointHue.forDegrees(Int(tile.hue))) {
+            RingView(ring: tile.ring, hue: hue) {
                 VStack(spacing: 0) {
                     Text(tile.valueText).font(.tileNum).monospacedDigit().foregroundColor(.ink)
                     if !tile.unit.isEmpty {
@@ -115,6 +123,19 @@ private struct TileView: View {
                     .multilineTextAlignment(.center)
                 Text(tile.meta).font(.caption).foregroundColor(.inkDim)
             }
+            // The primary action: soft tonal ± buttons carrying the point's own hue.
+            HStack(spacing: 8) {
+                Button { tileHaptic(); onDecrement() } label: {
+                    Text("−").padding(.horizontal, 10).padding(.vertical, 4)
+                }
+                .buttonStyle(.bordered)
+                Button { tileHaptic(); onIncrement() } label: {
+                    Text("+\(tile.step)").padding(.horizontal, 12).padding(.vertical, 4)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(hue.color)
+            }
+            .font(.bodyUI)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -122,6 +143,10 @@ private struct TileView: View {
         .background(Color.surface)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
+}
+
+private func tileHaptic() {
+    UIImpactFeedbackGenerator(style: .light).impactOccurred()
 }
 
 /// The tile gauge: a track, a progress arc (the point's hue when accented, else calm ink), scale ticks, and
