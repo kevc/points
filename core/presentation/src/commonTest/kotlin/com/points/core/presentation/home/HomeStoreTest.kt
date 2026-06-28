@@ -14,6 +14,7 @@ import kotlinx.datetime.Instant
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -76,6 +77,16 @@ class HomeStoreTest {
     fun tileCarriesTheStepForOnTileCounting() {
         val pushups = type(name = "Push-ups").copy(step = 10)
         assertEquals(10L, statesFor(tile(pushups, value = 0)).single().step)
+    }
+
+    @Test
+    fun emptyCatalogIsLoadedSoTheFirstRunPromptCanShow() {
+        val store = DefaultStoreFactory().homeStore(
+            observeTiles = ObserveTiles { flowOf(emptyList()) },
+            mainContext = UnconfinedTestDispatcher(),
+        )
+        assertTrue(store.state.tiles.isEmpty())
+        assertTrue(store.state.loaded, "an emission arrived, so this is empty (not still loading)")
     }
 
     @Test
