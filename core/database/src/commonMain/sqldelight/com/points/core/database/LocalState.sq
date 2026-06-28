@@ -1,22 +1,29 @@
 -- Single-row store for this install's stable identity and sync position. Pinned to id = 0 so there is
 -- exactly one row. owner_id is the anonymous tenancy token (bound to an account at M6); device_id is the
--- per-install attribution; sync_cursor is the highest server seq this install has pulled (used in M3 sync).
--- Provisioned once on first open and never overwritten, so identity survives relaunches.
+-- per-install attribution; sync_cursor is the highest server seq this install has pulled for the event
+-- ledger; type_cursor is the same pull watermark for the point-type catalog (types sync on their own seq so
+-- a rename re-stamps and propagates independently of events). Provisioned once on first open and never
+-- overwritten, so identity survives relaunches.
 
 CREATE TABLE local_state (
     id          INTEGER NOT NULL PRIMARY KEY,
     owner_id    TEXT    NOT NULL,
     device_id   TEXT    NOT NULL,
-    sync_cursor INTEGER NOT NULL DEFAULT 0
+    sync_cursor INTEGER NOT NULL DEFAULT 0,
+    type_cursor INTEGER NOT NULL DEFAULT 0
 );
 
--- Insert the identity exactly once; a second call (a relaunch) is ignored, so the row is stable.
+-- Insert the identity exactly once; a second call (a relaunch) is ignored, so the row is stable. The
+-- cursors default to 0 (a fresh install has pulled nothing).
 provision:
-INSERT OR IGNORE INTO local_state(id, owner_id, device_id, sync_cursor)
-VALUES (0, ?, ?, 0);
+INSERT OR IGNORE INTO local_state(id, owner_id, device_id, sync_cursor, type_cursor)
+VALUES (0, ?, ?, 0, 0);
 
 selectState:
-SELECT owner_id, device_id, sync_cursor FROM local_state WHERE id = 0;
+SELECT owner_id, device_id, sync_cursor, type_cursor FROM local_state WHERE id = 0;
 
 setCursor:
 UPDATE local_state SET sync_cursor = ? WHERE id = 0;
+
+setTypeCursor:
+UPDATE local_state SET type_cursor = ? WHERE id = 0;
