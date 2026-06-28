@@ -7,6 +7,8 @@ import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.arkivanov.mvikotlin.core.instancekeeper.getStore
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.states
+import com.points.core.domain.DecrementPoint
+import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObserveTiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +24,10 @@ interface HomeComponent {
     val state: Value<HomeStore.State>
     fun onTileClicked(pointTypeId: Uuid)
     fun onCreate()
+
+    /** Count [pointTypeId] up/down by [step] straight from its tile — the primary action, no screen change. */
+    fun onIncrement(pointTypeId: Uuid, step: Long)
+    fun onDecrement(pointTypeId: Uuid, step: Long)
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -29,6 +35,8 @@ class DefaultHomeComponent(
     componentContext: ComponentContext,
     storeFactory: StoreFactory,
     observeTiles: ObserveTiles,
+    private val increment: IncrementPoint,
+    private val decrement: DecrementPoint,
     mainContext: CoroutineContext,
     private val onOpenType: (Uuid) -> Unit,
     private val onCreateType: () -> Unit,
@@ -47,4 +55,12 @@ class DefaultHomeComponent(
     override fun onTileClicked(pointTypeId: Uuid) = onOpenType(pointTypeId)
 
     override fun onCreate() = onCreateType()
+
+    override fun onIncrement(pointTypeId: Uuid, step: Long) {
+        scope.launch { increment(pointTypeId, step) }
+    }
+
+    override fun onDecrement(pointTypeId: Uuid, step: Long) {
+        scope.launch { decrement(pointTypeId, step) }
+    }
 }

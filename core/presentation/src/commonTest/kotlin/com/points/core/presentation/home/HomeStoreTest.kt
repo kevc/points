@@ -73,6 +73,12 @@ class HomeStoreTest {
     }
 
     @Test
+    fun tileCarriesTheStepForOnTileCounting() {
+        val pushups = type(name = "Push-ups").copy(step = 10)
+        assertEquals(10L, statesFor(tile(pushups, value = 0)).single().step)
+    }
+
+    @Test
     fun easingMetaReadsAsCalmRecency() {
         val anger = type(name = "Times angry", goal = PointGoal.DOWN)
         assertEquals("today", statesFor(tile(anger, value = 12, daysSinceLast = 0)).single().meta)
