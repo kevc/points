@@ -3,21 +3,32 @@ package com.points.core.data.di
 import com.points.core.data.DatabaseDriverFactory
 import com.points.core.data.OfflineFirstPointRepository
 import com.points.core.data.SyncCoordinator
+import com.points.core.data.createPointType
 import com.points.core.data.decrementPoint
+import com.points.core.data.deletePointType
+import com.points.core.data.editPointType
 import com.points.core.data.incrementPoint
+import com.points.core.data.observePointTypes
 import com.points.core.data.observePointValue
 import com.points.core.data.observeSyncStatus
 import com.points.core.data.syncPointEvents
 import com.points.core.database.LocalEventDataSource
+import com.points.core.database.LocalPointTypeDataSource
+import com.points.core.domain.CreatePointType
 import com.points.core.domain.DecrementPoint
+import com.points.core.domain.DeletePointType
+import com.points.core.domain.EditPointType
 import com.points.core.domain.IncrementPoint
+import com.points.core.domain.ObservePointTypes
 import com.points.core.domain.ObservePointValue
 import com.points.core.domain.ObserveSyncStatus
 import com.points.core.domain.PointRepository
+import com.points.core.domain.PointTypeRepository
 import com.points.core.domain.SyncPointEvents
 import com.points.core.network.PointsApiService
 import com.points.core.network.pointsHttpClient
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.combine
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -31,22 +42,33 @@ import org.koin.dsl.module
 val dataModule: Module = module {
     single { get<DatabaseDriverFactory>().create() }
     single { LocalEventDataSource(get(), get<CoroutineDispatcher>(named("io"))) }
+    // Shares the same driver/db as the ledger; identity is provisioned by LocalEventDataSource, so it is
+    // handed that owner rather than provisioning its own.
+    single { LocalPointTypeDataSource(get(), get<CoroutineDispatcher>(named("io")), get<LocalEventDataSource>().ownerId) }
     single { pointsHttpClient(get()) }
     single { PointsApiService(get(), get<String>(named("baseUrl"))) }
-    single<PointRepository> {
-        OfflineFirstPointRepository(
-            local = get(),
-            api = get(),
-        )
-    }
+    // One repository instance serves both ports (it owns the single batch sync for events + types).
+    single { OfflineFirstPointRepository(local = get(), types = get(), api = get()) }
+    single<PointRepository> { get<OfflineFirstPointRepository>() }
+    single<PointTypeRepository> { get<OfflineFirstPointRepository>() }
     factory<IncrementPoint> { incrementPoint(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<DecrementPoint> { decrementPoint(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<ObservePointValue> { observePointValue(get()) }
     factory<SyncPointEvents> { syncPointEvents(get(), get<CoroutineDispatcher>(named("io"))) }
+    factory<CreatePointType> { createPointType(get(), get<CoroutineDispatcher>(named("io"))) }
+    factory<EditPointType> { editPointType(get(), get<CoroutineDispatcher>(named("io"))) }
+    factory<DeletePointType> { deletePointType(get(), get<CoroutineDispatcher>(named("io"))) }
+    factory<ObservePointTypes> { observePointTypes(get()) }
     // One coordinator per app: it holds the sync status stream all observers share. `ConnectivityMonitor`
-    // is supplied by platformDataModule (T21); the pending-count flow comes from the local ledger so an
-    // append that can't reach the server surfaces as unsynced rather than a stale "Synced".
-    single { SyncCoordinator(get(), get<LocalEventDataSource>().observePendingCount(), get()) }
+    // is supplied by platformDataModule (T21); the pending-count flow is events + type changes combined, so
+    // an unpushed edit of either kind surfaces as unsynced rather than a stale "Synced".
+    single {
+        val pending = combine(
+            get<LocalEventDataSource>().observePendingCount(),
+            get<LocalPointTypeDataSource>().observePendingTypeCount(),
+        ) { events, types -> events + types }
+        SyncCoordinator(get(), pending, get())
+    }
     factory<ObserveSyncStatus> { observeSyncStatus(get()) }
 }
 

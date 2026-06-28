@@ -1,0 +1,63 @@
+-- The point-type catalog: the mutable metadata (name, color, how it's counted) that gives a ledger its
+-- identity. Unlike point_event (an append-only union), a type is a **last-write-wins register**: every edit
+-- bumps updated_at, and on a sync conflict the row with the newer updated_at wins. Deletion is a tombstone
+-- (deleted_at set), never a hard delete, so the events referencing it stay meaningful.
+--
+-- Scoped to owner_id like the ledger. `pending` is 1 for a locally-made change not yet pushed, 0 once sync
+-- confirms it (and for every change pulled from the server). mode/goal are stored as the enum name.
+
+CREATE TABLE point_type (
+    id         TEXT    NOT NULL PRIMARY KEY,
+    owner_id   TEXT    NOT NULL,
+    name       TEXT    NOT NULL,
+    hue        INTEGER NOT NULL,
+    icon       TEXT    NOT NULL,
+    mode       TEXT    NOT NULL,
+    step       INTEGER NOT NULL,
+    goal       TEXT    NOT NULL,
+    target     INTEGER,
+    unit       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER,
+    pending    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX point_type_by_owner ON point_type(owner_id);
+
+-- A local create/edit/delete: we are the writer, our edit is the newest, so replace unconditionally and
+-- mark pending for the next push. `created_at` is carried through unchanged by the caller.
+upsertLocal:
+INSERT OR REPLACE INTO point_type(
+    id, owner_id, name, hue, icon, mode, step, goal, target, unit, created_at, updated_at, deleted_at, pending
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
+
+-- Write a type pulled from the server, confirmed (pending = 0). The last-write-wins guard (apply only when
+-- the incoming updated_at is strictly newer than our copy) is enforced in the data source before this runs,
+-- rather than as a SQL UPSERT — the project's SQLDelight dialect predates ON CONFLICT DO UPDATE.
+upsertSynced:
+INSERT OR REPLACE INTO point_type(
+    id, owner_id, name, hue, icon, mode, step, goal, target, unit, created_at, updated_at, deleted_at, pending
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0);
+
+-- The owner's live (non-tombstoned) types — what the home screen lists.
+selectActive:
+SELECT * FROM point_type WHERE owner_id = ? AND deleted_at IS NULL ORDER BY created_at, id;
+
+-- One type by id (any state, incl. tombstoned) — used to preserve created_at on edit/delete.
+selectById:
+SELECT * FROM point_type WHERE owner_id = ? AND id = ?;
+
+-- The owner's type changes awaiting upload — sync's push set (newest first is irrelevant; ordered for determinism).
+pendingTypes:
+SELECT * FROM point_type WHERE owner_id = ? AND pending = 1 ORDER BY updated_at, id;
+
+-- Count of pending type changes, so the sync coordinator can treat an unpushed type edit as "unsynced".
+pendingTypeCount:
+SELECT COUNT(*) FROM point_type WHERE owner_id = ? AND pending = 1;
+
+-- Mark the given type ids confirmed (no longer pending) after a successful sync push.
+clearPendingTypes:
+UPDATE point_type SET pending = 0 WHERE owner_id = ? AND id IN ?;

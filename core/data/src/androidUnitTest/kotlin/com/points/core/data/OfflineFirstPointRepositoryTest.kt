@@ -2,6 +2,7 @@ package com.points.core.data
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.points.core.database.LocalEventDataSource
+import com.points.core.database.LocalPointTypeDataSource
 import com.points.core.domain.PointRepository
 import com.points.core.network.PointsApiService
 import com.points.core.network.pointsHttpClient
@@ -35,6 +36,8 @@ class OfflineFirstPointRepositoryTest {
      * An in-memory stand-in for the backend `/sync` endpoint: insert-if-absent by id, server-assigned
      * monotonic seq, and an owner-scoped "events since cursor" pull — the same contract the real
      * `DatabaseEventStorage` implements. [online] flips the network off to exercise offline-first behavior.
+     * Type sync is exercised separately in [OfflineFirstPointTypeRepositoryTest]; the request's `pointTypes`
+     * default to empty here, so this fake stays event-only.
      */
     private class FakeSyncBackend {
         var online: Boolean = true
@@ -69,14 +72,17 @@ class OfflineFirstPointRepositoryTest {
         return PointsApiService(pointsHttpClient(engine), "https://api.test")
     }
 
-    private fun localFor(ownerId: String? = null): LocalEventDataSource {
-        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        LocalEventDataSource.createSchema(driver)
-        return LocalEventDataSource(driver, Dispatchers.Unconfined, ownerId = ownerId)
+    /** Event + type local stores over one in-memory db, sharing the provisioned owner. */
+    private class Local(ownerId: String? = null) {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY).also { LocalEventDataSource.createSchema(it) }
+        val events = LocalEventDataSource(driver, Dispatchers.Unconfined, ownerId = ownerId)
+        val types = LocalPointTypeDataSource(driver, Dispatchers.Unconfined, events.ownerId)
     }
 
-    private fun repository(api: PointsApiService, local: LocalEventDataSource = localFor()): PointRepository =
-        OfflineFirstPointRepository(local = local, api = api)
+    private fun localFor(ownerId: String? = null): Local = Local(ownerId)
+
+    private fun repository(api: PointsApiService, local: Local = localFor()): PointRepository =
+        OfflineFirstPointRepository(local = local.events, types = local.types, api = api)
 
     private val offlineApi = PointsApiService(
         pointsHttpClient(MockEngine { error("offline") }),
@@ -100,7 +106,7 @@ class OfflineFirstPointRepositoryTest {
         assertEquals(typeId, event.pointTypeId)
         assertEquals(3L, event.delta)
         assertTrue(event.deviceId.isNotBlank())
-        assertEquals(local.deviceId, event.deviceId) // stamped from the install's provisioned identity
+        assertEquals(local.events.deviceId, event.deviceId) // stamped from the install's provisioned identity
     }
 
     @Test
@@ -127,15 +133,15 @@ class OfflineFirstPointRepositoryTest {
         repo.append(typeId, 2)
 
         // append only persists — pushing is the SyncCoordinator's job (it observes the pending count).
-        assertEquals(1, local.pendingEvents().size, "append leaves the event pending; it does not auto-push")
+        assertEquals(1, local.events.pendingEvents().size, "append leaves the event pending; it does not auto-push")
 
         repo.sync() // the coordinator drives this reactively in the app; here we invoke it directly
-        assertTrue(local.pendingEvents().isEmpty(), "sync pushes and clears pending")
+        assertTrue(local.events.pendingEvents().isEmpty(), "sync pushes and clears pending")
 
         // A second device on the same owner pulls the pushed event.
-        val other = localFor(local.ownerId)
+        val other = localFor(local.events.ownerId)
         repository(apiFor(backend), other).sync()
-        assertEquals(2L, other.value(typeId))
+        assertEquals(2L, other.events.value(typeId))
     }
 
     @Test
@@ -145,12 +151,12 @@ class OfflineFirstPointRepositoryTest {
         val repo = repository(apiFor(backend), local)
 
         repo.append(typeId, 7) // event stays pending until a sync pushes it
-        assertEquals(1, local.pendingEvents().size)
+        assertEquals(1, local.events.pendingEvents().size)
         assertEquals(7L, repo.observeValue(typeId).first())
 
         backend.online = true
         repo.sync()
-        assertTrue(local.pendingEvents().isEmpty())
+        assertTrue(local.events.pendingEvents().isEmpty())
     }
 
     @Test
@@ -191,10 +197,10 @@ class OfflineFirstPointRepositoryTest {
         val local = localFor()
         val repo = repository(apiFor(backend), local)
         repo.append(typeId, 6)
-        assertEquals(1, local.pendingEvents().size)
+        assertEquals(1, local.events.pendingEvents().size)
 
         backend.online = true
         syncPointEvents(repo, Dispatchers.Unconfined)()
-        assertTrue(local.pendingEvents().isEmpty())
+        assertTrue(local.events.pendingEvents().isEmpty())
     }
 }

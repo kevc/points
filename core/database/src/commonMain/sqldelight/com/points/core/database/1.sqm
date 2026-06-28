@@ -1,0 +1,27 @@
+-- Migration v1 -> v2 (M4 #81): add the point-type catalog and its sync cursor.
+--
+-- Existing installs are on v1 (point_event + local_state only). Without this migration a .sq change would
+-- leave them on the old tables and crash on launch (see CLAUDE.md). Fresh installs get the final schema
+-- straight from the .sq files; this script brings v1 installs up to it. The schema version bumps to 2
+-- automatically (one migration present).
+
+CREATE TABLE point_type (
+    id         TEXT    NOT NULL PRIMARY KEY,
+    owner_id   TEXT    NOT NULL,
+    name       TEXT    NOT NULL,
+    hue        INTEGER NOT NULL,
+    icon       TEXT    NOT NULL,
+    mode       TEXT    NOT NULL,
+    step       INTEGER NOT NULL,
+    goal       TEXT    NOT NULL,
+    target     INTEGER,
+    unit       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER,
+    pending    INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX point_type_by_owner ON point_type(owner_id);
+
+ALTER TABLE local_state ADD COLUMN type_cursor INTEGER NOT NULL DEFAULT 0;
