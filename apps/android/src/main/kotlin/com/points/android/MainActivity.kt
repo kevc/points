@@ -3,6 +3,7 @@ package com.points.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -98,7 +101,7 @@ private fun CounterScreen(component: CounterComponent) {
             TextButton(onClick = component::onEdit) { Text("Edit") }
         }
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -111,8 +114,30 @@ private fun CounterScreen(component: CounterComponent) {
                 modifier = Modifier.padding(top = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Button(onClick = component::onDecrement) { Text("-") }
-                Button(onClick = component::onIncrement) { Text("+") }
+                Button(onClick = component::onDecrement, enabled = !state.deleted) { Text("-") }
+                Button(onClick = component::onIncrement, enabled = !state.deleted) { Text("+") }
+            }
+            Row(
+                modifier = Modifier.padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TextButton(onClick = component::onReset, enabled = !state.deleted) { Text("Reset to zero") }
+                TextButton(onClick = component::onDelete, enabled = !state.deleted) { Text("Remove") }
+            }
+        }
+        state.undoLabel?.let { label ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, color = MaterialTheme.colorScheme.onSurface)
+                TextButton(onClick = component::onUndo) { Text("Undo") }
             }
         }
     }

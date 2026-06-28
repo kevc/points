@@ -6,6 +6,7 @@ import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.core.utils.isAssertOnMainThreadEnabled
 import com.points.core.domain.CreatePointType
 import com.points.core.domain.DecrementPoint
+import com.points.core.domain.DeletePointType
 import com.points.core.domain.EditPointType
 import com.points.core.domain.GreetUseCase
 import com.points.core.domain.IncrementPoint
@@ -14,6 +15,8 @@ import com.points.core.domain.ObservePointValue
 import com.points.core.domain.ObserveSyncStatus
 import com.points.core.domain.ObserveTiles
 import com.points.core.domain.PointEvent
+import com.points.core.domain.ResetPointType
+import com.points.core.domain.RestorePointType
 import com.points.core.domain.PointGoal
 import com.points.core.domain.PointMode
 import com.points.core.domain.PointTile
@@ -66,6 +69,9 @@ private val fakeDataModule = module {
     factory<ObserveTiles> { ObserveTiles { flowOf(listOf(sampleTile())) } }
     factory<CreatePointType> { CreatePointType { draft -> typeFrom(draft) } }
     factory<EditPointType> { EditPointType { id, draft -> typeFrom(draft, id) } }
+    factory<ResetPointType> { ResetPointType { id -> fakeEvent(id, 0) } }
+    factory<DeletePointType> { DeletePointType { } }
+    factory<RestorePointType> { RestorePointType { } }
 }
 
 @OptIn(ExperimentalUuidApi::class)
