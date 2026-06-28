@@ -4,12 +4,12 @@ import PointsKit
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     private let root: RootComponent
-    @StateObject private var counterModel: CounterModel
+    @StateObject private var stackModel: RootStackModel
     @StateObject private var syncModel: SyncModel
 
     init(root: RootComponent) {
         self.root = root
-        _counterModel = StateObject(wrappedValue: CounterModel(root.counter))
+        _stackModel = StateObject(wrappedValue: RootStackModel(root))
         _syncModel = StateObject(wrappedValue: SyncModel(root.sync))
     }
 
@@ -17,37 +17,222 @@ struct ContentView: View {
         ZStack(alignment: .top) {
             Color.bg.ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                // Hero numeral: design type scale, tabular figures, clamped so it
-                // never overflows at large accessibility sizes.
-                Text("\(counterModel.value)")
-                    .font(.counter)
-                    .monospacedDigit()
-                    .foregroundColor(.ink)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-
-                HStack(spacing: 24) {
-                    Button("−") { root.counter.onDecrement() }
-                    Button("+") { root.counter.onIncrement() }
-                }
-                .font(.titleLg)
-                .buttonStyle(.bordered)
-            }
-            .frame(maxHeight: .infinity)
+            childView(stackModel.child)
 
             SyncStatusView(status: syncModel.status)
                 .padding(.top, 8)
         }
-        .padding()
-        // Generic counter shows the default hue; a real point type sets its own.
-        .tint(PointHue.blue.color)
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 root.sync.onAppForegrounded() // reconcile when brought to the foreground
             }
         }
     }
+
+    /// Renders the active Decompose child — the home grid, or a per-type counter when a tile is tapped.
+    @ViewBuilder
+    private func childView(_ child: RootComponentChild) -> some View {
+        if let home = child as? RootComponentChildHome {
+            HomeView(component: home.component)
+        } else if let detail = child as? RootComponentChildDetail {
+            CounterView(component: detail.component)
+        }
+    }
 }
+
+// MARK: - Home grid
+
+private struct HomeView: View {
+    let component: HomeComponent
+    @StateObject private var model: HomeModel
+
+    init(component: HomeComponent) {
+        self.component = component
+        _model = StateObject(wrappedValue: HomeModel(component))
+    }
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Points").font(.titleLg).foregroundColor(.ink)
+                Text("\(model.tiles.count) things, quietly counting")
+                    .font(.bodyUI).foregroundColor(.inkDim)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 24)
+            .padding(.bottom, 8)
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(model.tiles.indices, id: \.self) { index in
+                        let tile = model.tiles[index]
+                        TileView(tile: tile)
+                            .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+private struct TileView: View {
+    let tile: HomeTile
+
+    var body: some View {
+        VStack(spacing: 12) {
+            RingView(ring: tile.ring, hue: PointHue.forDegrees(Int(tile.hue))) {
+                VStack(spacing: 0) {
+                    Text(tile.valueText).font(.tileNum).monospacedDigit().foregroundColor(.ink)
+                    if !tile.unit.isEmpty {
+                        Text(tile.unit).font(.caption).foregroundColor(.inkDim)
+                    }
+                }
+            }
+            VStack(spacing: 2) {
+                Text(tile.name).font(.bodyUI).foregroundColor(.ink)
+                    .multilineTextAlignment(.center)
+                Text(tile.meta).font(.caption).foregroundColor(.inkDim)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 12)
+        .background(Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+/// The tile gauge: a track, a progress arc (the point's hue when accented, else calm ink), scale ticks, and
+/// an over-target marker — the SwiftUI rendering of the domain `RingState`. `content` sits at the center.
+private struct RingView<Content: View>: View {
+    let ring: DomainRingState
+    let hue: PointHue
+    @ViewBuilder var content: () -> Content
+
+    private let diameter: CGFloat = 104
+    private let stroke: CGFloat = 7
+
+    var body: some View {
+        let arcColor = ring.useAccent ? hue.color : Color.ink
+        let progress = CGFloat(min(max(ring.progress, 0), 1))
+        let tickCount = Int(ring.ticks)
+
+        ZStack {
+            Circle().stroke(Color.ringTrack, lineWidth: stroke)
+
+            if progress > 0 {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(arcColor, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+
+            if tickCount > 1 {
+                ForEach(0..<tickCount, id: \.self) { i in
+                    Rectangle()
+                        .fill(Color.surface)
+                        .frame(width: 2, height: stroke + 3)
+                        .offset(y: -(diameter / 2 - stroke / 2))
+                        .rotationEffect(.degrees(Double(i) / Double(tickCount) * 360))
+                }
+            }
+
+            if ring.over {
+                Circle()
+                    .fill(arcColor)
+                    .frame(width: stroke + 3, height: stroke + 3)
+                    .offset(y: -diameter / 2)
+            }
+
+            content()
+        }
+        .frame(width: diameter, height: diameter)
+    }
+}
+
+private final class HomeModel: ObservableObject {
+    @Published var tiles: [HomeTile]
+    private var cancellation: DecomposeCancellation?
+
+    init(_ component: HomeComponent) {
+        let state = component.state
+        tiles = state.value.tiles
+        cancellation = state.subscribe { [weak self] newState in
+            self?.tiles = newState.tiles
+        }
+    }
+
+    deinit {
+        cancellation?.cancel()
+    }
+}
+
+private final class RootStackModel: ObservableObject {
+    @Published var child: RootComponentChild
+    private var cancellation: DecomposeCancellation?
+
+    init(_ root: RootComponent) {
+        let stack = root.stack
+        child = stack.value.active.instance as! RootComponentChild
+        cancellation = stack.subscribe { [weak self] newStack in
+            self?.child = newStack.active.instance as! RootComponentChild
+        }
+    }
+
+    deinit {
+        cancellation?.cancel()
+    }
+}
+
+// MARK: - Per-type counter (interim detail until M5)
+
+private struct CounterView: View {
+    let component: CounterComponent
+    @StateObject private var model: CounterModel
+
+    init(component: CounterComponent) {
+        self.component = component
+        _model = StateObject(wrappedValue: CounterModel(component))
+    }
+
+    var body: some View {
+        VStack {
+            HStack {
+                Button("← Back") { component.onBack() }
+                    .font(.bodyUI)
+                    .foregroundColor(.inkDim)
+                Spacer()
+            }
+            .padding()
+
+            Spacer()
+            Text("\(model.value)")
+                .font(.counter)
+                .monospacedDigit()
+                .foregroundColor(.ink)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+
+            HStack(spacing: 24) {
+                Button("−") { component.onDecrement() }
+                Button("+") { component.onIncrement() }
+            }
+            .font(.titleLg)
+            .buttonStyle(.bordered)
+            .padding(.top, 24)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Sync status
 
 /// Compact, secondary sync-status indicator: a spinner while syncing, otherwise a short label.
 private struct SyncStatusView: View {

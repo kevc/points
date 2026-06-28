@@ -11,5 +11,6 @@ class PointsApplication : Application() {
         initKoin {
             androidContext(this@PointsApplication)
         }
+        seedSampleDataIfDebuggable() // TEMPORARY: demo data for the home grid until #83/#86 (see DebugSeed.kt)
     }
 }

@@ -53,6 +53,11 @@ class OfflineFirstPointRepository(
 
     override fun observeValue(pointTypeId: Uuid): Flow<Long> = local.observeValue(pointTypeId)
 
+    override fun observeValueSince(pointTypeId: Uuid, sinceMillis: Long): Flow<Long> =
+        local.observeValueSince(pointTypeId, sinceMillis)
+
+    override fun observeLastActivity(pointTypeId: Uuid): Flow<Long?> = local.observeLastActivity(pointTypeId)
+
     override suspend fun create(draft: PointTypeDraft): PointType {
         val now = clock.now()
         val type = PointType(

@@ -22,11 +22,16 @@ import kotlin.uuid.Uuid
 @OptIn(ExperimentalUuidApi::class)
 val DEFAULT_POINT_TYPE_ID: Uuid = Uuid.parse("00000000-0000-0000-0000-000000000001")
 
-/** Shared component backing the counter screen: exposes the value and the increment/decrement intents. */
+/**
+ * Shared component backing the per-type counter screen: exposes the value and the increment/decrement
+ * intents, plus [onBack] to pop back to the home grid. From M4 it is parameterized by the tapped type's id
+ * (no longer the single [DEFAULT_POINT_TYPE_ID]).
+ */
 interface CounterComponent {
     val state: Value<CounterStore.State>
     fun onIncrement()
     fun onDecrement()
+    fun onBack()
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -38,6 +43,7 @@ class DefaultCounterComponent(
     decrement: DecrementPoint,
     observeValue: ObservePointValue,
     mainContext: CoroutineContext,
+    private val onBackPressed: () -> Unit = {},
 ) : CounterComponent, ComponentContext by componentContext {
 
     private val store = instanceKeeper.getStore {
@@ -55,4 +61,6 @@ class DefaultCounterComponent(
     override fun onIncrement() = store.accept(CounterStore.Intent.Increment)
 
     override fun onDecrement() = store.accept(CounterStore.Intent.Decrement)
+
+    override fun onBack() = onBackPressed()
 }

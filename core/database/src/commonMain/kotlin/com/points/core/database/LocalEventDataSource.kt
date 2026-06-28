@@ -5,6 +5,7 @@ import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.db.SqlDriver
 import com.points.core.domain.PointEvent
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Instant
 import kotlin.coroutines.CoroutineContext
 import kotlin.uuid.ExperimentalUuidApi
@@ -103,6 +104,21 @@ class LocalEventDataSource(
     /** Emits the current value for this owner's [pointTypeId], re-emitting whenever the ledger changes. */
     fun observeValue(pointTypeId: Uuid): Flow<Long> =
         queries.valueForType(ownerId, pointTypeId.toString()).asFlow().mapToOne(queryContext)
+
+    /**
+     * Emits the value accumulated at or after [sinceMillis] for this owner's [pointTypeId] — the mode-aware
+     * read for a daily type's "today" count. Re-emits whenever the ledger changes.
+     */
+    fun observeValueSince(pointTypeId: Uuid, sinceMillis: Long): Flow<Long> =
+        queries.valueForTypeSince(ownerId, pointTypeId.toString(), sinceMillis).asFlow().mapToOne(queryContext)
+
+    /**
+     * Emits the epoch-millis timestamp of this owner's most recent positive event for [pointTypeId] (the
+     * recency input for an easing tile's gauge), or null when there is none. Re-emits on ledger changes.
+     */
+    fun observeLastActivity(pointTypeId: Uuid): Flow<Long?> =
+        queries.lastActivityAt(ownerId, pointTypeId.toString()).asFlow().mapToOne(queryContext)
+            .map { if (it == 0L) null else it }
 
     companion object {
         /** Creates the ledger schema on a fresh driver. */

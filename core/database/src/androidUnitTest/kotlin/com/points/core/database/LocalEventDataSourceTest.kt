@@ -71,6 +71,27 @@ class LocalEventDataSourceTest {
     }
 
     @Test
+    fun observeValueSinceCountsOnlyAtOrAfterTheCutoff() = runTest {
+        val ds = newDataSource()
+        ds.insert(event(2, at = 1_000)) // before the cutoff (yesterday)
+        ds.insert(event(3, at = 5_000)) // at/after the cutoff (today)
+        ds.insert(event(1, at = 9_000))
+        assertEquals(4L, ds.observeValueSince(typeId, sinceMillis = 5_000).first(), "today's window = 3 + 1")
+        assertEquals(6L, ds.observeValueSince(typeId, sinceMillis = 0).first(), "since 0 == all-time")
+    }
+
+    @Test
+    fun observeLastActivityIsTheLatestPositiveEventOrNull() = runTest {
+        val ds = newDataSource()
+        assertEquals(null, ds.observeLastActivity(typeId).first(), "no events → no activity")
+
+        ds.insert(event(1, at = 3_000))
+        ds.insert(event(1, at = 8_000))
+        ds.insert(event(-5, at = 9_000)) // a decrement/adjustment is not "activity" for recency
+        assertEquals(8_000L, ds.observeLastActivity(typeId).first())
+    }
+
+    @Test
     fun localInsertsArePendingUntilCleared() {
         val ds = newDataSource()
         val a = Uuid.random()

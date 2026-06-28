@@ -14,6 +14,28 @@ enum PointHue: String, CaseIterable, Codable {
     case red     // 18°
     case magenta // 330°
 
+    /// The color-wheel angle (degrees) each hue sits at — matches the Android palette and the design.
+    var degrees: Int {
+        switch self {
+        case .green: return 152
+        case .blue: return 215
+        case .violet: return 285
+        case .amber: return 40
+        case .red: return 18
+        case .magenta: return 330
+        }
+    }
+
+    /// Maps a point type's stored hue (color-wheel degrees) to the nearest palette entry.
+    static func forDegrees(_ hue: Int) -> PointHue {
+        let deg = ((hue % 360) + 360) % 360
+        return allCases.min { a, b in
+            let da = min(abs(a.degrees - deg), 360 - abs(a.degrees - deg))
+            let db = min(abs(b.degrees - deg), 360 - abs(b.degrees - deg))
+            return da < db
+        } ?? .green
+    }
+
     var color: Color {
         switch self {
         case .green:   return Color(light: Color(red: 0.318, green: 0.569, blue: 0.392),

@@ -19,6 +19,19 @@ interface PointRepository {
     /** Emits the current value (`SUM(delta)`) for [pointTypeId], re-emitting whenever it changes. */
     fun observeValue(pointTypeId: Uuid): Flow<Long>
 
+    /**
+     * Emits the value accumulated at or after [sinceMillis] (`SUM(delta)` where `createdAt >= sinceMillis`),
+     * re-emitting on change. The mode-aware read for a daily type's "today" count (caller passes local
+     * midnight); `sinceMillis = 0` is equivalent to [observeValue].
+     */
+    fun observeValueSince(pointTypeId: Uuid, sinceMillis: Long): Flow<Long>
+
+    /**
+     * Emits the epoch-millis timestamp of the most recent positive event for [pointTypeId] (the recency input
+     * for an "easing" tile's gauge), or null if there is none. Re-emits whenever the ledger changes.
+     */
+    fun observeLastActivity(pointTypeId: Uuid): Flow<Long?>
+
     /** Uploads pending events and pulls missing ones, merging additively. Idempotent and best-effort. */
     suspend fun sync()
 }
