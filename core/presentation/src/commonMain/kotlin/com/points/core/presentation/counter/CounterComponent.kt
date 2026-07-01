@@ -8,8 +8,11 @@ import com.arkivanov.mvikotlin.core.instancekeeper.getStore
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.states
 import com.points.core.domain.DecrementPoint
+import com.points.core.domain.DeletePointType
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObservePointValue
+import com.points.core.domain.ResetPointType
+import com.points.core.domain.RestorePointType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -33,6 +36,10 @@ interface CounterComponent {
     fun onDecrement()
     fun onBack()
     fun onEdit()
+    fun onReset()
+    fun onDelete()
+    fun onUndo()
+    fun onDismissUndo()
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -43,13 +50,16 @@ class DefaultCounterComponent(
     increment: IncrementPoint,
     decrement: DecrementPoint,
     observeValue: ObservePointValue,
+    reset: ResetPointType,
+    delete: DeletePointType,
+    restore: RestorePointType,
     mainContext: CoroutineContext,
     private val onBackPressed: () -> Unit = {},
     private val onEditRequested: () -> Unit = {},
 ) : CounterComponent, ComponentContext by componentContext {
 
     private val store = instanceKeeper.getStore {
-        storeFactory.counterStore(pointTypeId, increment, decrement, observeValue, mainContext)
+        storeFactory.counterStore(pointTypeId, increment, decrement, observeValue, reset, delete, restore, mainContext)
     }
 
     private val scope = CoroutineScope(SupervisorJob() + mainContext)
@@ -67,4 +77,12 @@ class DefaultCounterComponent(
     override fun onBack() = onBackPressed()
 
     override fun onEdit() = onEditRequested()
+
+    override fun onReset() = store.accept(CounterStore.Intent.Reset)
+
+    override fun onDelete() = store.accept(CounterStore.Intent.Delete)
+
+    override fun onUndo() = store.accept(CounterStore.Intent.Undo)
+
+    override fun onDismissUndo() = store.accept(CounterStore.Intent.DismissUndo)
 }

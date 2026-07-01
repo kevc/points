@@ -51,6 +51,8 @@ class OfflineFirstPointRepository(
         return event
     }
 
+    override suspend fun currentValue(pointTypeId: Uuid): Long = local.value(pointTypeId)
+
     override fun observeValue(pointTypeId: Uuid): Flow<Long> = local.observeValue(pointTypeId)
 
     override fun observeValueSince(pointTypeId: Uuid, sinceMillis: Long): Flow<Long> =
@@ -100,6 +102,12 @@ class OfflineFirstPointRepository(
         if (!existing.isActive) return // already tombstoned — idempotent
         val now = clock.now()
         types.upsertLocal(existing.copy(deletedAt = now, updatedAt = now))
+    }
+
+    override suspend fun restore(id: Uuid) {
+        val existing = types.typeById(id) ?: return
+        if (existing.isActive) return // already live — idempotent
+        types.upsertLocal(existing.copy(deletedAt = null, updatedAt = clock.now()))
     }
 
     override fun observeTypes(): Flow<List<PointType>> = types.observeTypes()

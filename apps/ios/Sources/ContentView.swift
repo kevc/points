@@ -218,6 +218,7 @@ private struct CounterView: View {
     }
 
     var body: some View {
+        let s = model.state
         VStack {
             HStack {
                 Button("← Back") { component.onBack() }
@@ -231,7 +232,7 @@ private struct CounterView: View {
             .padding()
 
             Spacer()
-            Text("\(model.value)")
+            Text("\(s.value)")
                 .font(.counter)
                 .monospacedDigit()
                 .foregroundColor(.ink)
@@ -244,7 +245,31 @@ private struct CounterView: View {
             .font(.titleLg)
             .buttonStyle(.bordered)
             .padding(.top, 24)
+            .disabled(s.deleted)
+
+            HStack(spacing: 16) {
+                Button("Reset to zero") { component.onReset() }
+                Button("Remove") { component.onDelete() }
+            }
+            .font(.bodyUI)
+            .foregroundColor(.inkDim)
+            .padding(.top, 16)
+            .disabled(s.deleted)
+
             Spacer()
+
+            if let label = s.undoLabel {
+                HStack {
+                    Text(label).foregroundColor(.ink)
+                    Spacer()
+                    Button("Undo") { component.onUndo() }
+                }
+                .font(.bodyUI)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(Color.surfaceHigh)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(16)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -282,14 +307,14 @@ private struct SyncStatusView: View {
 
 /// Bridges the shared Decompose `Value<CounterStore.State>` into an observable SwiftUI model.
 private final class CounterModel: ObservableObject {
-    @Published var value: Int64
+    @Published var state: CounterStoreState
     private var cancellation: DecomposeCancellation?
 
     init(_ component: CounterComponent) {
-        let state = component.state
-        value = state.value.value
-        cancellation = state.subscribe { [weak self] newState in
-            self?.value = newState.value
+        let s = component.state
+        state = s.value
+        cancellation = s.subscribe { [weak self] newState in
+            self?.state = newState
         }
     }
 

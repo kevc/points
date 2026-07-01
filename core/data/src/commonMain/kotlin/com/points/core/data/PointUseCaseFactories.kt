@@ -6,6 +6,7 @@ import com.points.core.domain.DecrementPoint
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObservePointValue
 import com.points.core.domain.PointRepository
+import com.points.core.domain.ResetPointType
 import com.points.core.domain.SyncPointEvents
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -27,3 +28,8 @@ fun observePointValue(repo: PointRepository): ObservePointValue =
 
 fun syncPointEvents(repo: PointRepository, io: CoroutineDispatcher): SyncPointEvents =
     SyncPointEvents { withContext(io) { repo.sync() } }
+
+fun resetPointType(repo: PointRepository, io: CoroutineDispatcher): ResetPointType =
+    ResetPointType { pointTypeId ->
+        withContext(io) { repo.append(pointTypeId, -repo.currentValue(pointTypeId)) }
+    }
