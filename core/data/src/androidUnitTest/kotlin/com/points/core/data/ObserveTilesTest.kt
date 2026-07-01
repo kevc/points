@@ -64,7 +64,6 @@ class ObserveTilesTest {
         assertEquals(30L, tile.value, "cumulative value is the all-time sum")
         assertEquals(milestoneOf(30).progress, tile.ring.progress)
         assertEquals(milestoneOf(30).climbingNext, tile.climbingNext)
-        assertFalse(tile.ring.useAccent)
     }
 
     @Test
@@ -83,7 +82,6 @@ class ObserveTilesTest {
         assertEquals(5L, tile.value, "only today's cups count toward the daily tile")
         assertEquals(5f / 8f, tile.ring.progress)
         assertEquals(8, tile.ring.ticks)
-        assertTrue(tile.ring.useAccent)
         assertFalse(tile.ring.over)
     }
 
@@ -100,7 +98,6 @@ class ObserveTilesTest {
         val tile = observe().first().single()
         assertEquals(5, tile.daysSinceLast)
         assertEquals(5f / 30f, tile.ring.progress)
-        assertTrue(tile.ring.useAccent)
     }
 
     @Test

@@ -71,11 +71,10 @@ class RingMathTest {
     // ── ring states ───────────────────────────────────────────────────────────
 
     @Test
-    fun cumulativeRingIsMonochromeMilestoneProgress() {
+    fun cumulativeRingIsMilestoneProgress() {
         val ring = ringStateOf(type(mode = PointMode.CUMULATIVE), value = 42, daysSinceLast = 0)
         assertEquals(milestoneOf(42).progress, ring.progress)
         assertEquals(4, ring.ticks)
-        assertFalse(ring.useAccent)
         assertFalse(ring.over)
     }
 
@@ -85,7 +84,6 @@ class RingMathTest {
         val ring = ringStateOf(water, value = 5, daysSinceLast = 0)
         assertEquals(5f / 8f, ring.progress)
         assertEquals(8, ring.ticks, "a small daily target shows one tick per unit")
-        assertTrue(ring.useAccent)
         assertFalse(ring.over)
     }
 
@@ -109,7 +107,6 @@ class RingMathTest {
         // value is irrelevant for an easing gauge — only days-since matters.
         assertEquals(5f / 30f, ringStateOf(anger, value = 999, daysSinceLast = 5).progress)
         assertEquals(1f, ringStateOf(anger, value = 0, daysSinceLast = 40).progress, "caps at 30 days")
-        assertTrue(ringStateOf(anger, value = 12, daysSinceLast = 5).useAccent)
     }
 
     @Test
@@ -117,6 +114,5 @@ class RingMathTest {
         // A daily tally with the target turned off is just a plain gauge, not a target ring.
         val ring = ringStateOf(type(mode = PointMode.DAILY, target = null), value = 5, daysSinceLast = 0)
         assertEquals(milestoneOf(5).progress, ring.progress)
-        assertFalse(ring.useAccent)
     }
 }

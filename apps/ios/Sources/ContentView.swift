@@ -192,7 +192,7 @@ private struct RingView<Content: View>: View {
     private let stroke: CGFloat = 7
 
     var body: some View {
-        let arcColor = ring.useAccent ? hue.color : Color.ink
+        let arcColor = hue.color
         let progress = CGFloat(min(max(ring.progress, 0), 1))
         let tickCount = Int(ring.ticks)
 

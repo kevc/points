@@ -89,7 +89,7 @@ private fun sampleTile() = PointTile(
         createdAt = Instant.fromEpochSeconds(0), updatedAt = Instant.fromEpochSeconds(0),
     ),
     value = 5,
-    ring = RingState(progress = 5f / 8f, ticks = 8, useAccent = true, over = false),
+    ring = RingState(progress = 5f / 8f, ticks = 8, over = false),
     daysSinceLast = 0,
     climbingNext = 10,
 )

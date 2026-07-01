@@ -24,9 +24,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * The tile gauge: a track, a progress arc (the point's hue when [RingState.useAccent], else calm monochrome),
- * scale ticks, and an over-target marker — the Compose rendering of the domain [RingState]. [content] is
- * centered inside the ring (the value numeral).
+ * The tile gauge: a track, a progress arc (always the point's hue), scale ticks, and an over-target marker —
+ * the Compose rendering of the domain [RingState]. [content] is centered inside the ring (the value numeral).
  */
 @Composable
 fun Ring(
@@ -38,7 +37,7 @@ fun Ring(
     content: @Composable () -> Unit,
 ) {
     val track = if (isSystemInDarkTheme()) RingTrackDark else RingTrackLight
-    val arc = if (ring.useAccent) hue.accent() else MaterialTheme.colorScheme.onSurface
+    val arc = hue.accent()
     val notch = MaterialTheme.colorScheme.surface
 
     Box(modifier = modifier.size(diameter), contentAlignment = Alignment.Center) {

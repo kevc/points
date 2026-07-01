@@ -7,14 +7,14 @@ package com.points.core.domain
  * @property progress fill fraction 0..1.
  * @property ticks number of scale ticks to draw on the track (a small daily target shows one tick per unit so
  *   the count is legible off the face; everything else uses 4 quarter ticks).
- * @property useAccent true to paint the arc in the point's hue (daily/easing gauges), false for the calm
- *   monochrome cumulative gauge.
  * @property over true when a daily count has exceeded its target (draw the over-target marker; never "red").
+ *
+ * The arc is always painted in the point's hue — color is the tile's identity, applied consistently across
+ * every gauge (climbing, easing, and daily-target alike).
  */
 data class RingState(
     val progress: Float,
     val ticks: Int,
-    val useAccent: Boolean,
     val over: Boolean,
 )
 
@@ -33,7 +33,6 @@ fun ringStateOf(type: PointType, value: Long, daysSinceLast: Int): RingState {
         return RingState(
             progress = if (target <= 0L) 0f else (value.toFloat() / target.toFloat()).coerceIn(0f, 1f),
             ticks = if (target in 1L..12L) target.toInt() else 4,
-            useAccent = true,
             over = value > target,
         )
     }
@@ -41,9 +40,8 @@ fun ringStateOf(type: PointType, value: Long, daysSinceLast: Int): RingState {
         return RingState(
             progress = (daysSinceLast.toFloat() / 30f).coerceIn(0f, 1f),
             ticks = 4,
-            useAccent = true,
             over = false,
         )
     }
-    return RingState(progress = milestoneOf(value).progress, ticks = 4, useAccent = false, over = false)
+    return RingState(progress = milestoneOf(value).progress, ticks = 4, over = false)
 }
