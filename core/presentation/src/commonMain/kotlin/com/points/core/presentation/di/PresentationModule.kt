@@ -11,6 +11,8 @@ import com.points.core.domain.GreetUseCase
 import com.points.core.domain.greetUseCase
 import com.points.core.presentation.counter.CounterComponent
 import com.points.core.presentation.counter.DefaultCounterComponent
+import com.points.core.presentation.edit.CreateEditComponent
+import com.points.core.presentation.edit.DefaultCreateEditComponent
 import com.points.core.presentation.hello.DefaultHelloComponent
 import com.points.core.presentation.hello.HelloComponent
 import com.points.core.presentation.home.DefaultHomeComponent
@@ -45,17 +47,19 @@ val presentationModule = module {
         )
     }
 
-    factory<HomeComponent> { (componentContext: ComponentContext, onOpen: (Uuid) -> Unit) ->
+    factory<HomeComponent> { (componentContext: ComponentContext, onOpen: (Uuid) -> Unit, onCreate: () -> Unit) ->
         DefaultHomeComponent(
             componentContext = componentContext,
             storeFactory = get(),
             observeTiles = get(),
             mainContext = get<CoroutineDispatcher>(named("main")),
             onOpenType = onOpen,
+            onCreateType = onCreate,
         )
     }
 
-    factory<CounterComponent> { (componentContext: ComponentContext, pointTypeId: Uuid, onBack: () -> Unit) ->
+    factory<CounterComponent> {
+            (componentContext: ComponentContext, pointTypeId: Uuid, onBack: () -> Unit, onEdit: () -> Unit) ->
         DefaultCounterComponent(
             componentContext = componentContext,
             storeFactory = get(),
@@ -65,6 +69,37 @@ val presentationModule = module {
             observeValue = get(),
             mainContext = get<CoroutineDispatcher>(named("main")),
             onBackPressed = onBack,
+            onEditRequested = onEdit,
+        )
+    }
+
+    factory<CreateEditComponent> {
+            (componentContext: ComponentContext, editId: Uuid?, onSaved: () -> Unit, onCancel: () -> Unit) ->
+        DefaultCreateEditComponent(
+            componentContext = componentContext,
+            storeFactory = get(),
+            editId = editId,
+            create = get(),
+            edit = get(),
+            observeTypes = get(),
+            mainContext = get<CoroutineDispatcher>(named("main")),
+            onSaved = onSaved,
+            onCancelled = onCancel,
+        )
+    }
+
+    factory<CreateEditComponent> {
+            (componentContext: ComponentContext, editId: Uuid?, onSaved: () -> Unit, onCancel: () -> Unit) ->
+        DefaultCreateEditComponent(
+            componentContext = componentContext,
+            storeFactory = get(),
+            editId = editId,
+            create = get(),
+            edit = get(),
+            observeTypes = get(),
+            mainContext = get<CoroutineDispatcher>(named("main")),
+            onSaved = onSaved,
+            onCancelled = onCancel,
         )
     }
 
@@ -81,9 +116,14 @@ val presentationModule = module {
     factory<RootComponent> { (componentContext: ComponentContext) ->
         DefaultRootComponent(
             componentContext,
-            home = { childContext, onOpen -> get<HomeComponent> { parametersOf(childContext, onOpen) } },
-            detail = { childContext, typeId, onBack ->
-                get<CounterComponent> { parametersOf(childContext, typeId, onBack) }
+            home = { childContext, onOpen, onCreate ->
+                get<HomeComponent> { parametersOf(childContext, onOpen, onCreate) }
+            },
+            detail = { childContext, typeId, onBack, onEdit ->
+                get<CounterComponent> { parametersOf(childContext, typeId, onBack, onEdit) }
+            },
+            create = { childContext, editId, onSaved, onCancel ->
+                get<CreateEditComponent> { parametersOf(childContext, editId, onSaved, onCancel) }
             },
             sync = { childContext -> get<SyncComponent> { parametersOf(childContext) } },
         )

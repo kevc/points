@@ -16,11 +16,12 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/** Backs the home grid: exposes the tiles and reports a tap so the root can open that type's detail. */
+/** Backs the home grid: exposes the tiles, reports a tap to open a type's detail, and a FAB tap to create. */
 @OptIn(ExperimentalUuidApi::class)
 interface HomeComponent {
     val state: Value<HomeStore.State>
     fun onTileClicked(pointTypeId: Uuid)
+    fun onCreate()
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -30,6 +31,7 @@ class DefaultHomeComponent(
     observeTiles: ObserveTiles,
     mainContext: CoroutineContext,
     private val onOpenType: (Uuid) -> Unit,
+    private val onCreateType: () -> Unit,
 ) : HomeComponent, ComponentContext by componentContext {
 
     private val store = instanceKeeper.getStore { storeFactory.homeStore(observeTiles, mainContext) }
@@ -43,4 +45,6 @@ class DefaultHomeComponent(
         }
 
     override fun onTileClicked(pointTypeId: Uuid) = onOpenType(pointTypeId)
+
+    override fun onCreate() = onCreateType()
 }
