@@ -39,7 +39,8 @@ import com.points.core.domain.PointGoal
 import com.points.core.domain.PointMode
 import com.points.core.presentation.edit.CreateEditComponent
 
-private val HUES = listOf(152, 215, 285, 40, 18, 330, 95, 250)
+/** The picker offers exactly the palette's hues — one swatch per [PointHue]. */
+private val HUES = PointHue.entries.map { it.degrees }
 
 /** The create/edit form: name, color, how it's counted, step, optional daily target, and tone. */
 @Composable

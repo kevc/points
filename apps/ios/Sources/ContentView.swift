@@ -327,7 +327,8 @@ private struct CreateEditView: View {
         _model = StateObject(wrappedValue: CreateEditModel(component))
     }
 
-    private let hues: [Int32] = [152, 215, 285, 40, 18, 330, 95, 250]
+    // The picker offers exactly the palette's hues — one swatch per PointHue.
+    private let hues: [Int32] = PointHue.allCases.map { Int32($0.degrees) }
 
     var body: some View {
         let s = model.state
