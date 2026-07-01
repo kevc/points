@@ -36,7 +36,9 @@ import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.arkivanov.decompose.retainedComponent
 import com.points.android.ui.CreateEditScreen
 import com.points.android.ui.HomeScreen
+import com.points.android.ui.theme.PointHue
 import com.points.android.ui.theme.PointsTheme
+import com.points.android.ui.theme.accent
 import com.points.core.domain.SyncStatus
 import com.points.core.presentation.counter.CounterComponent
 import com.points.core.presentation.root.RootComponent
@@ -120,6 +122,7 @@ private fun CounterScreen(component: CounterComponent) {
             Text(
                 text = state.value.toString(),
                 style = MaterialTheme.typography.displayLarge,
+                color = PointHue.forDegrees(state.hue).accent(),
                 modifier = Modifier.semantics { contentDescription = "counter value" },
             )
             Row(

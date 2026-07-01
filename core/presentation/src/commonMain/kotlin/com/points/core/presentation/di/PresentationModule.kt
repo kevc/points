@@ -70,6 +70,7 @@ val presentationModule = module {
             increment = get(),
             decrement = get(),
             observeValue = get(),
+            observeTypes = get(),
             reset = get(),
             delete = get(),
             restore = get(),
