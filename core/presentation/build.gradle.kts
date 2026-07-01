@@ -1,6 +1,8 @@
 plugins {
     id("points.kmp.library")
-    alias(libs.plugins.skie)
+    // SKIE 0.10.6 doesn't support Kotlin 2.3.0; disabled on this Paparazzi spike branch only (Android
+    // screenshots don't need the iOS framework). Do NOT carry this to a real branch — restore for iOS.
+    // alias(libs.plugins.skie)
 }
 
 android {

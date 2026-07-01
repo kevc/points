@@ -1,6 +1,7 @@
 plugins {
     id("points.android.application")
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.paparazzi)
 }
 
 android {
