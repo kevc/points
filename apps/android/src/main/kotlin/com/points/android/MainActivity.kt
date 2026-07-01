@@ -3,15 +3,19 @@ package com.points.android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +54,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var root: RootComponent
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge() // draw under the system bars; we inset the content below
         super.onCreate(savedInstanceState)
 
         root = retainedComponent { componentContext ->
@@ -62,7 +67,14 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    // Inset once at the root so every screen (and the sync overlay) clears the status
+                    // bar, nav bar, and display cutout. `safeDrawing` also covers the IME. The Surface
+                    // still fills the whole window, so the bars are tinted with the background color.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.safeDrawing),
+                    ) {
                         Children(stack = root.stack) { child ->
                             when (val instance = child.instance) {
                                 is RootComponent.Child.Home -> HomeScreen(instance.component)
