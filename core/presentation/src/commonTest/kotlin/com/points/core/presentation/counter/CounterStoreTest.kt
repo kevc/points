@@ -5,8 +5,12 @@ import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import com.points.core.domain.DecrementPoint
 import com.points.core.domain.DeletePointType
 import com.points.core.domain.IncrementPoint
+import com.points.core.domain.ObservePointTypes
 import com.points.core.domain.ObservePointValue
 import com.points.core.domain.PointEvent
+import com.points.core.domain.PointGoal
+import com.points.core.domain.PointMode
+import com.points.core.domain.PointType
 import com.points.core.domain.ResetPointType
 import com.points.core.domain.RestorePointType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,15 +37,18 @@ class CounterStoreTest {
         isAssertOnMainThreadEnabled = false
     }
 
-    /** A fake ledger: a backing value the use cases mutate/observe, plus delete/restore call counters. */
+    /** A fake ledger: a backing value the use cases mutate/observe, the type stream (for hue), plus
+     *  delete/restore call counters. */
     private class FakeLedger {
         val value = MutableStateFlow(0L)
+        val types = MutableStateFlow<List<PointType>>(emptyList())
         var deleteCalls = 0
         var restoreCalls = 0
 
         val increment = IncrementPoint { id, delta -> value.update { it + delta }; event(id, delta) }
         val decrement = DecrementPoint { id, delta -> value.update { it - delta }; event(id, -delta) }
         val observe = ObservePointValue { value }
+        val observeTypes = ObservePointTypes { types }
         val reset = ResetPointType { id -> val old = value.value; value.value = 0; event(id, -old) }
         val delete = DeletePointType { deleteCalls++ }
         val restore = RestorePointType { restoreCalls++ }
@@ -50,8 +57,14 @@ class CounterStoreTest {
             PointEvent(Uuid.random(), id, delta, "device-test", Instant.fromEpochSeconds(0))
     }
 
+    private fun type(id: Uuid, hue: Int) = PointType(
+        id = id, name = "X", hue = hue, icon = "spark", mode = PointMode.CUMULATIVE, step = 1,
+        goal = PointGoal.UP, target = null, unit = "",
+        createdAt = Instant.fromEpochSeconds(0), updatedAt = Instant.fromEpochSeconds(0),
+    )
+
     private fun store(ledger: FakeLedger) = DefaultStoreFactory().counterStore(
-        typeId, ledger.increment, ledger.decrement, ledger.observe,
+        typeId, ledger.increment, ledger.decrement, ledger.observe, ledger.observeTypes,
         ledger.reset, ledger.delete, ledger.restore, UnconfinedTestDispatcher(),
     )
 
@@ -59,6 +72,12 @@ class CounterStoreTest {
     fun showsObservedValueOnCreation() = runTest {
         val ledger = FakeLedger().apply { value.value = 5 }
         assertEquals(5L, store(ledger).state.value)
+    }
+
+    @Test
+    fun reflectsTheTypesHueSoTheScreenCanTintItself() = runTest {
+        val ledger = FakeLedger().apply { types.value = listOf(type(typeId, hue = 215)) }
+        assertEquals(215, store(ledger).state.hue, "the counter screen tints to the type's color")
     }
 
     @Test

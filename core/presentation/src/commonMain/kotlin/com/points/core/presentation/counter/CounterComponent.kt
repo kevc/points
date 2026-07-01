@@ -10,6 +10,7 @@ import com.arkivanov.mvikotlin.extensions.coroutines.states
 import com.points.core.domain.DecrementPoint
 import com.points.core.domain.DeletePointType
 import com.points.core.domain.IncrementPoint
+import com.points.core.domain.ObservePointTypes
 import com.points.core.domain.ObservePointValue
 import com.points.core.domain.ResetPointType
 import com.points.core.domain.RestorePointType
@@ -50,6 +51,7 @@ class DefaultCounterComponent(
     increment: IncrementPoint,
     decrement: DecrementPoint,
     observeValue: ObservePointValue,
+    observeTypes: ObservePointTypes,
     reset: ResetPointType,
     delete: DeletePointType,
     restore: RestorePointType,
@@ -59,7 +61,9 @@ class DefaultCounterComponent(
 ) : CounterComponent, ComponentContext by componentContext {
 
     private val store = instanceKeeper.getStore {
-        storeFactory.counterStore(pointTypeId, increment, decrement, observeValue, reset, delete, restore, mainContext)
+        storeFactory.counterStore(
+            pointTypeId, increment, decrement, observeValue, observeTypes, reset, delete, restore, mainContext,
+        )
     }
 
     private val scope = CoroutineScope(SupervisorJob() + mainContext)

@@ -292,7 +292,7 @@ private struct CounterView: View {
             Text("\(s.value)")
                 .font(.counter)
                 .monospacedDigit()
-                .foregroundColor(.ink)
+                .foregroundColor(PointHue.forDegrees(Int(s.hue)).color)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
             HStack(spacing: 24) {
