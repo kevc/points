@@ -35,17 +35,24 @@ SELECT COALESCE(SUM(delta), 0) FROM point_event WHERE owner_id = ? AND point_typ
 eventsForType:
 SELECT * FROM point_event WHERE owner_id = ? AND point_type_id = ? ORDER BY created_at, id;
 
--- Value accumulated at or after a cutoff — the mode-aware read for a daily type's "today" count (caller
--- passes local midnight). COALESCE makes an empty window evaluate to 0.
-valueForTypeSince:
-SELECT COALESCE(SUM(delta), 0) FROM point_event
-WHERE owner_id = ? AND point_type_id = ? AND created_at >= ?;
-
--- Timestamp of the most recent *positive* event — the recency input for an "easing" tile's gauge. COALESCE
--- to 0 keeps the result a non-null Long (single scalar column); the data source maps 0 (no positive event,
--- impossible for a real epoch-millis timestamp) back to null.
-lastActivityAt:
-SELECT COALESCE(MAX(created_at), 0) FROM point_event WHERE owner_id = ? AND point_type_id = ? AND delta > 0;
+-- All of an owner's per-type aggregates in one grouped scan — the home grid's single value read, collapsing
+-- what was a SUM query (and, for an easing tile, a recency query) per type into one reactive query so a
+-- write re-emits once, not once per observed type (the N+1). Per row:
+--   total            = SUM(delta) all-time (a cumulative tile's value)
+--   today_total      = SUM(delta) at/after :since, the daily "today" window (caller passes local midnight;
+--                      pass 0 to fold today into all-time)
+--   last_positive_at = MAX(created_at) over *positive* events, the recency input for an easing gauge; COALESCE
+--                      to 0 keeps it a non-null Long (the data source maps 0 — no positive event, impossible
+--                      for a real epoch-millis timestamp — back to null)
+-- A type with no rows is simply absent; the caller defaults it to zero (PointAggregate.Empty).
+aggregates:
+SELECT point_type_id,
+       COALESCE(SUM(delta), 0) AS total,
+       COALESCE(SUM(CASE WHEN created_at >= :since THEN delta ELSE 0 END), 0) AS today_total,
+       COALESCE(MAX(CASE WHEN delta > 0 THEN created_at ELSE NULL END), 0) AS last_positive_at
+FROM point_event
+WHERE owner_id = :owner
+GROUP BY point_type_id;
 
 -- The owner's events awaiting upload — sync's push set.
 pendingEvents:

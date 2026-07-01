@@ -20,17 +20,13 @@ interface PointRepository {
     fun observeValue(pointTypeId: Uuid): Flow<Long>
 
     /**
-     * Emits the value accumulated at or after [sinceMillis] (`SUM(delta)` where `createdAt >= sinceMillis`),
-     * re-emitting on change. The mode-aware read for a daily type's "today" count (caller passes local
-     * midnight); `sinceMillis = 0` is equivalent to [observeValue].
+     * Emits every point type's aggregated values ([PointAggregate]) keyed by type id, computed in a single
+     * grouped query and re-emitting once per ledger change — not once per observed type. Backs the home grid,
+     * collapsing what would otherwise be a per-tile SUM/recency flow each. [sinceMillis] is the day cutoff for
+     * the [PointAggregate.todayTotal] window (caller passes local midnight; `0` folds today into all-time). A
+     * type with no events yet is absent from the map ([PointAggregate.Empty]).
      */
-    fun observeValueSince(pointTypeId: Uuid, sinceMillis: Long): Flow<Long>
-
-    /**
-     * Emits the epoch-millis timestamp of the most recent positive event for [pointTypeId] (the recency input
-     * for an "easing" tile's gauge), or null if there is none. Re-emits whenever the ledger changes.
-     */
-    fun observeLastActivity(pointTypeId: Uuid): Flow<Long?>
+    fun observeAggregates(sinceMillis: Long): Flow<Map<Uuid, PointAggregate>>
 
     /** Uploads pending events and pulls missing ones, merging additively. Idempotent and best-effort. */
     suspend fun sync()

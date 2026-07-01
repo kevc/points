@@ -1,8 +1,10 @@
 package com.points.core.database
 
 import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.db.SqlDriver
+import com.points.core.domain.PointAggregate
 import com.points.core.domain.PointEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -106,19 +108,20 @@ class LocalEventDataSource(
         queries.valueForType(ownerId, pointTypeId.toString()).asFlow().mapToOne(queryContext)
 
     /**
-     * Emits the value accumulated at or after [sinceMillis] for this owner's [pointTypeId] — the mode-aware
-     * read for a daily type's "today" count. Re-emits whenever the ledger changes.
+     * Emits this owner's per-type aggregates ([PointAggregate]) keyed by type id from a single grouped query,
+     * re-emitting once whenever the ledger changes. [sinceMillis] is the daily "today" cutoff. Backs the home
+     * grid, replacing a reactive SUM/recency query per type (the read-path N+1). A type with no rows is absent
+     * from the map — the caller defaults it to [PointAggregate.Empty]. `last_positive_at = 0` (no positive
+     * event) maps back to null.
      */
-    fun observeValueSince(pointTypeId: Uuid, sinceMillis: Long): Flow<Long> =
-        queries.valueForTypeSince(ownerId, pointTypeId.toString(), sinceMillis).asFlow().mapToOne(queryContext)
-
-    /**
-     * Emits the epoch-millis timestamp of this owner's most recent positive event for [pointTypeId] (the
-     * recency input for an easing tile's gauge), or null when there is none. Re-emits on ledger changes.
-     */
-    fun observeLastActivity(pointTypeId: Uuid): Flow<Long?> =
-        queries.lastActivityAt(ownerId, pointTypeId.toString()).asFlow().mapToOne(queryContext)
-            .map { if (it == 0L) null else it }
+    fun observeAggregates(sinceMillis: Long): Flow<Map<Uuid, PointAggregate>> =
+        queries.aggregates(since = sinceMillis, owner = ownerId) { pointTypeId, total, todayTotal, lastPositiveAt ->
+            Uuid.parse(pointTypeId) to PointAggregate(
+                total = total,
+                todayTotal = todayTotal,
+                lastPositiveAt = lastPositiveAt.takeIf { it != 0L },
+            )
+        }.asFlow().mapToList(queryContext).map { it.toMap() }
 
     companion object {
         /** Creates the ledger schema on a fresh driver. */
