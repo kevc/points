@@ -7,6 +7,7 @@ import com.points.core.domain.DeletePointType
 import com.points.core.domain.EditPointType
 import com.points.core.domain.ObservePointTypes
 import com.points.core.domain.PointTypeRepository
+import com.points.core.domain.RestorePointType
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
@@ -24,6 +25,9 @@ fun editPointType(repo: PointTypeRepository, io: CoroutineDispatcher): EditPoint
 
 fun deletePointType(repo: PointTypeRepository, io: CoroutineDispatcher): DeletePointType =
     DeletePointType { id -> withContext(io) { repo.delete(id) } }
+
+fun restorePointType(repo: PointTypeRepository, io: CoroutineDispatcher): RestorePointType =
+    RestorePointType { id -> withContext(io) { repo.restore(id) } }
 
 fun observePointTypes(repo: PointTypeRepository): ObservePointTypes =
     ObservePointTypes { repo.observeTypes() }

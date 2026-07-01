@@ -12,6 +12,8 @@ import com.points.core.data.observePointTypes
 import com.points.core.data.observePointValue
 import com.points.core.data.observeSyncStatus
 import com.points.core.data.observeTiles
+import com.points.core.data.resetPointType
+import com.points.core.data.restorePointType
 import com.points.core.data.syncPointEvents
 import com.points.core.database.LocalEventDataSource
 import com.points.core.database.LocalPointTypeDataSource
@@ -26,6 +28,8 @@ import com.points.core.domain.ObserveSyncStatus
 import com.points.core.domain.ObserveTiles
 import com.points.core.domain.PointRepository
 import com.points.core.domain.PointTypeRepository
+import com.points.core.domain.ResetPointType
+import com.points.core.domain.RestorePointType
 import com.points.core.domain.SyncPointEvents
 import com.points.core.network.PointsApiService
 import com.points.core.network.pointsHttpClient
@@ -62,6 +66,8 @@ val dataModule: Module = module {
     factory<CreatePointType> { createPointType(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<EditPointType> { editPointType(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<DeletePointType> { deletePointType(get(), get<CoroutineDispatcher>(named("io"))) }
+    factory<RestorePointType> { restorePointType(get(), get<CoroutineDispatcher>(named("io"))) }
+    factory<ResetPointType> { resetPointType(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<ObservePointTypes> { observePointTypes(get()) }
     // The home read model: active types × mode-aware value × recency → ring, via the pure domain math.
     factory<ObserveTiles> {

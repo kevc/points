@@ -48,3 +48,13 @@ fun interface ObservePointValue {
 fun interface SyncPointEvents {
     suspend operator fun invoke()
 }
+
+/**
+ * Resets a point type's value to zero the non-destructive way: it appends a single **compensating** event
+ * (`delta = −currentValue`), so the history stays intact and the change syncs additively like any other.
+ * Returns that event; its `delta` negated is the amount to re-add to undo the reset.
+ */
+@OptIn(ExperimentalUuidApi::class)
+fun interface ResetPointType {
+    suspend operator fun invoke(pointTypeId: Uuid): PointEvent
+}

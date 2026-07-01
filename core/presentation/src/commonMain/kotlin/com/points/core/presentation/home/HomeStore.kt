@@ -21,7 +21,11 @@ import kotlin.uuid.Uuid
  * output handled by the component, not store state.
  */
 interface HomeStore : Store<Nothing, HomeStore.State, Nothing> {
-    data class State(val tiles: List<HomeTile> = emptyList())
+    /**
+     * @property loaded false until the first emission arrives, so the UI can tell "still loading" from a
+     *   genuinely empty catalog (and only then show the first-run prompt).
+     */
+    data class State(val tiles: List<HomeTile> = emptyList(), val loaded: Boolean = false)
 }
 
 /**
@@ -42,6 +46,7 @@ data class HomeTile(
     val meta: String,
     val ring: RingState,
     val hue: Int,
+    val step: Long,
 )
 
 private sealed interface Msg {
@@ -69,7 +74,7 @@ internal fun StoreFactory.homeStore(
         },
         reducer = { msg ->
             when (msg) {
-                is Msg.TilesUpdated -> copy(tiles = msg.tiles)
+                is Msg.TilesUpdated -> copy(tiles = msg.tiles, loaded = true)
             }
         },
     ) {}
@@ -83,6 +88,7 @@ private fun PointTile.toHomeTile(): HomeTile = HomeTile(
     meta = metaCaption(),
     ring = ring,
     hue = type.hue,
+    step = type.step,
 )
 
 /** The caption under a tile's value — tuned per mode/tone so it encourages rather than scores. */
