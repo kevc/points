@@ -2,6 +2,9 @@ package com.points.backend.db
 
 import com.points.backend.domain.StoredEvent
 import com.points.backend.plugins.h2DataSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import java.util.UUID
 import kotlin.test.Test
@@ -91,6 +94,31 @@ class DatabaseEventStorageTest {
         storage.append(event("a1", 1, ownerId = "owner-a"))
         storage.append(event("b1", 1, ownerId = "owner-b"))
         assertEquals(listOf("a1"), storage.eventsSince("owner-a", 0).map { it.id })
+    }
+
+    // A duplicate seq is silently skipped by the `seq > cursor` pull — an event that never reaches the
+    // other device, with no error anywhere. So uniqueness under concurrent writers is a hard invariant.
+    @Test
+    fun concurrentAppendsAssignUniqueSeqs() = runTest {
+        val storage = storage()
+        coroutineScope {
+            (1..32).forEach { i -> launch(Dispatchers.Default) { storage.append(event("e$i", 1)) } }
+        }
+        val seqs = storage.eventsSince(OWNER, 0).map { it.seq }
+        assertEquals(32, seqs.size)
+        assertEquals(32, seqs.toSet().size, "concurrent appends must never share a seq: $seqs")
+    }
+
+    // Two devices can upload the same event id at the same moment (a retried batch, a shared owner).
+    // Whoever loses the insert race must treat it as the idempotent union no-op, not surface a 500.
+    @Test
+    fun concurrentAppendsOfTheSameEventIdKeepOneRowWithoutErrors() = runTest {
+        val storage = storage()
+        coroutineScope {
+            repeat(16) { launch(Dispatchers.Default) { storage.append(event("dup", 1)) } }
+        }
+        assertEquals(1, storage.eventsSince(OWNER, 0).size)
+        assertEquals(1L, storage.valueFor(OWNER, TYPE))
     }
 
     private companion object {
