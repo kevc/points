@@ -46,7 +46,7 @@ class HomeStoreTest {
     ) = PointTile(
         type = type,
         value = value,
-        ring = RingState(progress = 0f, ticks = 4, useAccent = false, over = false),
+        ring = RingState(progress = 0f, ticks = 4, over = false),
         daysSinceLast = daysSinceLast,
         climbingNext = climbingNext,
     )
