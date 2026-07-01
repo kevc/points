@@ -4,8 +4,10 @@ import com.points.backend.domain.PointTypeStorage
 import com.points.backend.domain.StoredPointType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.sql.SQLException
 import java.sql.Types
 import javax.sql.DataSource
 
@@ -13,36 +15,45 @@ import javax.sql.DataSource
  * [PointTypeStorage] over raw JDBC. SQL lives in constants, all access runs on [Dispatchers.IO], and the
  * `point_type` table is created on construction (a real migration runner arrives later).
  *
- * A type is a last-write-wins register, so [upsert] is read-then-write: insert when new, otherwise overwrite
- * the mutable fields only when the incoming `updated_at` is strictly newer than the stored copy. Every
- * accepted change is re-stamped with a fresh, monotonic [StoredPointType.seq] (`MAX(seq)+1`) so a rename
- * re-propagates to other devices on the next pull — unlike an immutable event, whose seq is stable.
+ * A type is a last-write-wins register, and [upsert] must stay correct under concurrent writers (two devices
+ * syncing the same owner), so it is built from single-statement atomics instead of read-then-write:
+ * a conditional `UPDATE ... WHERE updated_at < ?` applies the merge and re-stamps [StoredPointType.seq] from
+ * a database sequence in one statement, an insert-if-absent covers the brand-new id, and a loser of the
+ * insert race (unique violation, both writers passed `NOT EXISTS`) falls back to the conditional update.
+ * The sequence (not `MAX(seq)+1`) is what makes concurrently accepted writes take **unique** seqs — a
+ * duplicate seq would be silently skipped by the `seq > ?` pull and never reach the other device. Every
+ * accepted change gets a fresh seq so a rename re-propagates on the next pull — unlike an immutable event,
+ * whose seq is stable.
  */
 class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeStorage {
 
     init {
         dataSource.connection.use { connection ->
-            connection.createStatement().use { it.execute(CREATE_TABLE) }
+            connection.createStatement().use { statement ->
+                statement.execute(CREATE_TABLE)
+                statement.execute(CREATE_SEQ)
+                // Re-seed so the sequence can never lag rows written before it existed (a pre-#99 database):
+                // a lagging sequence would deal already-taken seqs, recreating the silent-skip bug. Runs at
+                // construction only — single instance at boot, before any traffic. (#55's migration runner
+                // will own this properly.)
+                val nextSeq = statement.executeQuery(MAX_SEQ).use { rs -> rs.next(); rs.getLong(1) + 1 }
+                statement.execute("ALTER SEQUENCE point_type_seq RESTART WITH $nextSeq")
+            }
         }
     }
 
     override suspend fun upsert(type: StoredPointType): Unit = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
-            val existingUpdatedAt: Long? = connection.prepareStatement(SELECT_UPDATED_AT).use { statement ->
-                statement.setString(1, type.id)
-                statement.executeQuery().use { rs -> if (rs.next()) rs.getLong(1) else null }
+            if (connection.updateIfNewer(type) > 0) return@withContext
+            val inserted = try {
+                connection.insertIfAbsent(type)
+            } catch (e: SQLException) {
+                if (e.sqlState != UNIQUE_VIOLATION) throw e
+                0 // lost the insert race — the row exists now; merge below
             }
-            // Stale or unchanged → no-op (last-write-wins by updatedAt).
-            if (existingUpdatedAt != null && type.updatedAt <= existingUpdatedAt) return@withContext
-
-            val nextSeq = connection.prepareStatement(NEXT_SEQ).use { statement ->
-                statement.executeQuery().use { rs -> rs.next(); rs.getLong(1) }
-            }
-            val sql = if (existingUpdatedAt == null) INSERT else UPDATE
-            connection.prepareStatement(sql).use { statement ->
-                if (existingUpdatedAt == null) statement.bindInsert(type, nextSeq) else statement.bindUpdate(type, nextSeq)
-                statement.executeUpdate()
-            }
+            // Not inserted → a copy exists (stored, or a concurrent writer beat us): apply last-write-wins.
+            // 0 rows here means the stored copy is newer or same — the correct no-op.
+            if (inserted == 0) connection.updateIfNewer(type)
         }
     }
 
@@ -59,37 +70,41 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
             }
         }
 
-    private fun PreparedStatement.bindInsert(type: StoredPointType, seq: Long) {
-        setLong(1, seq)
-        setString(2, type.id)
-        setString(3, type.ownerId)
-        setString(4, type.name)
-        setInt(5, type.hue)
-        setString(6, type.icon)
-        setString(7, type.mode)
-        setLong(8, type.step)
-        setString(9, type.goal)
-        setNullableLong(10, type.target)
-        setString(11, type.unit)
-        setLong(12, type.createdAt)
-        setLong(13, type.updatedAt)
-        setNullableLong(14, type.deletedAt)
-    }
+    private fun Connection.updateIfNewer(type: StoredPointType): Int =
+        prepareStatement(UPDATE_IF_NEWER).use { statement ->
+            statement.setString(1, type.name)
+            statement.setInt(2, type.hue)
+            statement.setString(3, type.icon)
+            statement.setString(4, type.mode)
+            statement.setLong(5, type.step)
+            statement.setString(6, type.goal)
+            statement.setNullableLong(7, type.target)
+            statement.setString(8, type.unit)
+            statement.setLong(9, type.updatedAt)
+            statement.setNullableLong(10, type.deletedAt)
+            statement.setString(11, type.id)
+            statement.setLong(12, type.updatedAt) // WHERE updated_at < ? — strictly newer wins
+            statement.executeUpdate()
+        }
 
-    private fun PreparedStatement.bindUpdate(type: StoredPointType, seq: Long) {
-        setLong(1, seq)
-        setString(2, type.name)
-        setInt(3, type.hue)
-        setString(4, type.icon)
-        setString(5, type.mode)
-        setLong(6, type.step)
-        setString(7, type.goal)
-        setNullableLong(8, type.target)
-        setString(9, type.unit)
-        setLong(10, type.updatedAt)
-        setNullableLong(11, type.deletedAt)
-        setString(12, type.id) // WHERE id = ?
-    }
+    private fun Connection.insertIfAbsent(type: StoredPointType): Int =
+        prepareStatement(INSERT_IF_ABSENT).use { statement ->
+            statement.setString(1, type.id)
+            statement.setString(2, type.ownerId)
+            statement.setString(3, type.name)
+            statement.setInt(4, type.hue)
+            statement.setString(5, type.icon)
+            statement.setString(6, type.mode)
+            statement.setLong(7, type.step)
+            statement.setString(8, type.goal)
+            statement.setNullableLong(9, type.target)
+            statement.setString(10, type.unit)
+            statement.setLong(11, type.createdAt)
+            statement.setLong(12, type.updatedAt)
+            statement.setNullableLong(13, type.deletedAt)
+            statement.setString(14, type.id) // NOT EXISTS guard
+            statement.executeUpdate()
+        }
 
     private fun PreparedStatement.setNullableLong(index: Int, value: Long?) {
         if (value == null) setNull(index, Types.BIGINT) else setLong(index, value)
@@ -113,6 +128,9 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
     )
 
     private companion object {
+        /** Unique/primary-key violation — the same SQLState on H2 and Postgres. */
+        const val UNIQUE_VIOLATION = "23505"
+
         const val CREATE_TABLE = """
             CREATE TABLE IF NOT EXISTS point_type (
                 seq        BIGINT       NOT NULL,
@@ -132,22 +150,26 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
             )
         """
 
-        const val SELECT_UPDATED_AT = "SELECT updated_at FROM point_type WHERE id = ?"
+        // NEXTVAL('...') works on both engines: native on Postgres, a compatibility function on H2.
+        const val CREATE_SEQ = "CREATE SEQUENCE IF NOT EXISTS point_type_seq"
 
-        // Re-stamp every accepted change with the next monotonic seq so updates re-propagate on pull.
-        const val NEXT_SEQ = "SELECT COALESCE(MAX(seq), 0) + 1 FROM point_type"
+        const val MAX_SEQ = "SELECT COALESCE(MAX(seq), 0) FROM point_type"
 
-        const val INSERT = """
-            INSERT INTO point_type
-                (seq, id, owner_id, name, hue, icon, mode, step, goal, target, unit, created_at, updated_at, deleted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        // Accept only a strictly newer write (LWW) and re-stamp seq, atomically in one statement — the row
+        // lock makes concurrent updates serialize and re-check the guard, so arrival order can't matter.
+        const val UPDATE_IF_NEWER = """
+            UPDATE point_type SET
+                seq = NEXTVAL('point_type_seq'), name = ?, hue = ?, icon = ?, mode = ?, step = ?, goal = ?,
+                target = ?, unit = ?, updated_at = ?, deleted_at = ?
+            WHERE id = ? AND updated_at < ?
         """
 
-        const val UPDATE = """
-            UPDATE point_type SET
-                seq = ?, name = ?, hue = ?, icon = ?, mode = ?, step = ?, goal = ?, target = ?, unit = ?,
-                updated_at = ?, deleted_at = ?
-            WHERE id = ?
+        // NOT EXISTS is the fast path; the id race it can't close resolves as a unique violation upstream.
+        const val INSERT_IF_ABSENT = """
+            INSERT INTO point_type
+                (seq, id, owner_id, name, hue, icon, mode, step, goal, target, unit, created_at, updated_at, deleted_at)
+            SELECT NEXTVAL('point_type_seq'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            WHERE NOT EXISTS (SELECT 1 FROM point_type WHERE id = ?)
         """
 
         const val TYPES_SINCE =
