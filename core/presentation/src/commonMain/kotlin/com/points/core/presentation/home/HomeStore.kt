@@ -42,6 +42,7 @@ data class HomeTile(
     val meta: String,
     val ring: RingState,
     val hue: Int,
+    val step: Long,
 )
 
 private sealed interface Msg {
@@ -83,6 +84,7 @@ private fun PointTile.toHomeTile(): HomeTile = HomeTile(
     meta = metaCaption(),
     ring = ring,
     hue = type.hue,
+    step = type.step,
 )
 
 /** The caption under a tile's value — tuned per mode/tone so it encourages rather than scores. */

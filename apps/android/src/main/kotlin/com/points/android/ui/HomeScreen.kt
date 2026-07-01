@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -16,18 +17,24 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.points.android.ui.theme.PointHue
+import com.points.android.ui.theme.accent
 import com.points.core.presentation.home.HomeComponent
 import com.points.core.presentation.home.HomeTile
 
@@ -53,7 +60,12 @@ fun HomeScreen(component: HomeComponent, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 items(state.tiles, key = { it.id.toString() }) { tile ->
-                    Tile(tile = tile, onClick = { component.onTileClicked(tile.id) })
+                    Tile(
+                        tile = tile,
+                        onClick = { component.onTileClicked(tile.id) },
+                        onIncrement = { component.onIncrement(tile.id, tile.step) },
+                        onDecrement = { component.onDecrement(tile.id, tile.step) },
+                    )
                 }
             }
         }
@@ -67,7 +79,15 @@ fun HomeScreen(component: HomeComponent, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Tile(tile: HomeTile, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun Tile(
+    tile: HomeTile,
+    onClick: () -> Unit,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val haptics = LocalHapticFeedback.current
+    val hue = PointHue.forDegrees(tile.hue)
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
@@ -76,7 +96,7 @@ private fun Tile(tile: HomeTile, onClick: () -> Unit, modifier: Modifier = Modif
             .padding(vertical = 20.dp, horizontal = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Ring(ring = tile.ring, hue = PointHue.forDegrees(tile.hue)) {
+        Ring(ring = tile.ring, hue = hue) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(text = tile.valueText, style = MaterialTheme.typography.titleLarge)
                 if (tile.unit.isNotEmpty()) {
@@ -101,5 +121,30 @@ private fun Tile(tile: HomeTile, onClick: () -> Unit, modifier: Modifier = Modif
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        // The primary action: soft tonal ± buttons carrying the point's own hue.
+        Row(
+            modifier = Modifier.padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onDecrement()
+                },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            ) { Text("−") }
+            FilledTonalButton(
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onIncrement()
+                },
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = hue.accent().copy(alpha = 0.16f),
+                    contentColor = hue.accent(),
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            ) { Text("+${tile.step}") }
+        }
     }
 }
