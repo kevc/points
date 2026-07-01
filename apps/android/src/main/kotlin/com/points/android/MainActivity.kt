@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.arkivanov.decompose.retainedComponent
+import com.points.android.ui.CreateEditScreen
 import com.points.android.ui.HomeScreen
 import com.points.android.ui.theme.PointsTheme
 import com.points.core.domain.SyncStatus
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
                             when (val instance = child.instance) {
                                 is RootComponent.Child.Home -> HomeScreen(instance.component)
                                 is RootComponent.Child.Detail -> CounterScreen(instance.component)
+                                is RootComponent.Child.Create -> CreateEditScreen(instance.component)
                             }
                         }
                         SyncStatusIndicator(
@@ -88,8 +90,12 @@ class MainActivity : ComponentActivity() {
 private fun CounterScreen(component: CounterComponent) {
     val state by component.state.subscribeAsState()
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             TextButton(onClick = component::onBack) { Text("← Back") }
+            TextButton(onClick = component::onEdit) { Text("Edit") }
         }
         Column(
             modifier = Modifier.fillMaxSize(),

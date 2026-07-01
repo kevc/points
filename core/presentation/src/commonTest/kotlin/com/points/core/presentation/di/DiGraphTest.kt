@@ -4,7 +4,9 @@ import com.arkivanov.decompose.DefaultComponentContext
 import com.arkivanov.essenty.lifecycle.LifecycleRegistry
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.core.utils.isAssertOnMainThreadEnabled
+import com.points.core.domain.CreatePointType
 import com.points.core.domain.DecrementPoint
+import com.points.core.domain.EditPointType
 import com.points.core.domain.GreetUseCase
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObservePointTypes
@@ -16,6 +18,7 @@ import com.points.core.domain.PointGoal
 import com.points.core.domain.PointMode
 import com.points.core.domain.PointTile
 import com.points.core.domain.PointType
+import com.points.core.domain.PointTypeDraft
 import com.points.core.domain.RingState
 import com.points.core.domain.SyncPointEvents
 import com.points.core.domain.SyncStatus
@@ -50,7 +53,7 @@ private val sampleTypeId = Uuid.parse("00000000-0000-0000-0000-0000000000aa")
 /**
  * Stand-in for the real data module: fake use cases so the component graph resolves without a SQL driver or
  * HTTP engine. [ObserveTiles] reports one tile to prove the home grid wires through; [ObservePointValue]
- * reports a fixed value so the detail (counter) child reflects the observed flow.
+ * reports a fixed value so the detail child reflects the observed flow; create/edit are no-op fakes.
  */
 @OptIn(ExperimentalUuidApi::class)
 private val fakeDataModule = module {
@@ -61,7 +64,16 @@ private val fakeDataModule = module {
     factory<SyncPointEvents> { SyncPointEvents { } }
     factory<ObservePointTypes> { ObservePointTypes { flowOf(emptyList()) } }
     factory<ObserveTiles> { ObserveTiles { flowOf(listOf(sampleTile())) } }
+    factory<CreatePointType> { CreatePointType { draft -> typeFrom(draft) } }
+    factory<EditPointType> { EditPointType { id, draft -> typeFrom(draft, id) } }
 }
+
+@OptIn(ExperimentalUuidApi::class)
+private fun typeFrom(draft: PointTypeDraft, id: Uuid = Uuid.random()) = PointType(
+    id = id, name = draft.name, hue = draft.hue, icon = draft.icon, mode = draft.mode,
+    step = draft.step, goal = draft.goal, target = draft.target, unit = draft.unit,
+    createdAt = Instant.fromEpochSeconds(0), updatedAt = Instant.fromEpochSeconds(0),
+)
 
 @OptIn(ExperimentalUuidApi::class)
 private fun sampleTile() = PointTile(
@@ -94,12 +106,11 @@ class DiGraphTest {
 
     @OptIn(ExperimentalUuidApi::class)
     @Test
-    fun resolvesGraphAndNavigatesHomeToDetail() {
+    fun resolvesGraphAndNavigatesAcrossHomeDetailAndCreate() {
         val koin = startKoin {
             modules(presentationModule, testDispatcherModule, fakeDataModule)
         }.koin
 
-        // Plain singletons resolve.
         assertNotNull(koin.get<GreetUseCase>())
         assertNotNull(koin.get<StoreFactory>())
 
@@ -117,8 +128,21 @@ class DiGraphTest {
         val detail = root.stack.value.active.instance as RootComponent.Child.Detail
         assertEquals(7L, detail.component.state.value.value)
 
-        // Back returns to Home.
-        detail.component.onBack()
+        // The detail's edit affordance pushes the create/edit form.
+        detail.component.onEdit()
+        assertTrue(root.stack.value.active.instance is RootComponent.Child.Create)
+
+        // Back to Home; the FAB opens a fresh create form (editId = null, exercised via Koin parametersOf).
+        detail.component.onBack() // pop Create
+        detail.component.onBack() // pop Detail
+        val homeAgain = root.stack.value.active.instance as RootComponent.Child.Home
+        homeAgain.component.onCreate()
+        val create = root.stack.value.active.instance as RootComponent.Child.Create
+        assertTrue(!create.component.state.value.editing, "the FAB opens a new (non-editing) form")
+
+        // Saving the new form pops back to Home.
+        create.component.onName("Books read")
+        create.component.onSave()
         assertTrue(root.stack.value.active.instance is RootComponent.Child.Home)
     }
 }
