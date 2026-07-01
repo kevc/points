@@ -7,9 +7,11 @@ import com.arkivanov.essenty.lifecycle.doOnDestroy
 import com.arkivanov.mvikotlin.core.instancekeeper.getStore
 import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.extensions.coroutines.states
+import com.points.core.domain.CreatePointType
 import com.points.core.domain.DecrementPoint
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObserveTiles
+import com.points.core.domain.PointTypeDraft
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -28,6 +30,9 @@ interface HomeComponent {
     /** Count [pointTypeId] up/down by [step] straight from its tile — the primary action, no screen change. */
     fun onIncrement(pointTypeId: Uuid, step: Long)
     fun onDecrement(pointTypeId: Uuid, step: Long)
+
+    /** Create a starter type from a first-run [Suggestion] chip (it can be edited afterward). */
+    fun onQuickCreate(suggestion: Suggestion)
 }
 
 @OptIn(ExperimentalUuidApi::class)
@@ -37,6 +42,7 @@ class DefaultHomeComponent(
     observeTiles: ObserveTiles,
     private val increment: IncrementPoint,
     private val decrement: DecrementPoint,
+    private val create: CreatePointType,
     mainContext: CoroutineContext,
     private val onOpenType: (Uuid) -> Unit,
     private val onCreateType: () -> Unit,
@@ -62,5 +68,11 @@ class DefaultHomeComponent(
 
     override fun onDecrement(pointTypeId: Uuid, step: Long) {
         scope.launch { decrement(pointTypeId, step) }
+    }
+
+    override fun onQuickCreate(suggestion: Suggestion) {
+        scope.launch {
+            create(PointTypeDraft(name = suggestion.name, hue = suggestion.hue, icon = suggestion.icon))
+        }
     }
 }

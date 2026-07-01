@@ -54,6 +54,7 @@ val presentationModule = module {
             observeTiles = get(),
             increment = get(),
             decrement = get(),
+            create = get(),
             mainContext = get<CoroutineDispatcher>(named("main")),
             onOpenType = onOpen,
             onCreateType = onCreate,

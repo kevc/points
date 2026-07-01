@@ -1,4 +1,4 @@
-@file:OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+@file:OptIn(kotlin.uuid.ExperimentalUuidApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.points.android.ui
 
@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +38,8 @@ import com.points.android.ui.theme.PointHue
 import com.points.android.ui.theme.accent
 import com.points.core.presentation.home.HomeComponent
 import com.points.core.presentation.home.HomeTile
+import com.points.core.presentation.home.Suggestion
+import com.points.core.presentation.home.pointSuggestions
 
 /** The home grid: an app bar plus a 2-column grid of ring-gauge tiles, one per active point type. */
 @Composable
@@ -52,20 +55,24 @@ fun HomeScreen(component: HomeComponent, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                items(state.tiles, key = { it.id.toString() }) { tile ->
-                    Tile(
-                        tile = tile,
-                        onClick = { component.onTileClicked(tile.id) },
-                        onIncrement = { component.onIncrement(tile.id, tile.step) },
-                        onDecrement = { component.onDecrement(tile.id, tile.step) },
-                    )
+            if (state.loaded && state.tiles.isEmpty()) {
+                EmptyState(onQuickCreate = component::onQuickCreate)
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    items(state.tiles, key = { it.id.toString() }) { tile ->
+                        Tile(
+                            tile = tile,
+                            onClick = { component.onTileClicked(tile.id) },
+                            onIncrement = { component.onIncrement(tile.id, tile.step) },
+                            onDecrement = { component.onDecrement(tile.id, tile.step) },
+                        )
+                    }
                 }
             }
         }
@@ -75,6 +82,45 @@ fun HomeScreen(component: HomeComponent, modifier: Modifier = Modifier) {
             text = { Text("New") },
             icon = { Text("+", style = MaterialTheme.typography.titleLarge) },
         )
+    }
+}
+
+/** Gentle first-run prompt: a question + a few starter chips that quick-create a point type. */
+@Composable
+private fun EmptyState(onQuickCreate: (Suggestion) -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = "What would you like to count?",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Pick one to start — you can rename or change it any time. Nothing here is ever permanent.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(24.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            pointSuggestions.forEach { suggestion ->
+                val hue = PointHue.forDegrees(suggestion.hue)
+                FilledTonalButton(
+                    onClick = { onQuickCreate(suggestion) },
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = hue.accent().copy(alpha = 0.16f),
+                        contentColor = hue.accent(),
+                    ),
+                ) { Text(suggestion.name) }
+            }
+        }
     }
 }
 
