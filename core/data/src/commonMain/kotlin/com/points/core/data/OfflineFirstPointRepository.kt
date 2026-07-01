@@ -2,6 +2,7 @@ package com.points.core.data
 
 import com.points.core.database.LocalEventDataSource
 import com.points.core.database.LocalPointTypeDataSource
+import com.points.core.domain.PointAggregate
 import com.points.core.domain.PointEvent
 import com.points.core.domain.PointGoal
 import com.points.core.domain.PointMode
@@ -55,10 +56,8 @@ class OfflineFirstPointRepository(
 
     override fun observeValue(pointTypeId: Uuid): Flow<Long> = local.observeValue(pointTypeId)
 
-    override fun observeValueSince(pointTypeId: Uuid, sinceMillis: Long): Flow<Long> =
-        local.observeValueSince(pointTypeId, sinceMillis)
-
-    override fun observeLastActivity(pointTypeId: Uuid): Flow<Long?> = local.observeLastActivity(pointTypeId)
+    override fun observeAggregates(sinceMillis: Long): Flow<Map<Uuid, PointAggregate>> =
+        local.observeAggregates(sinceMillis)
 
     override suspend fun create(draft: PointTypeDraft): PointType {
         val now = clock.now()

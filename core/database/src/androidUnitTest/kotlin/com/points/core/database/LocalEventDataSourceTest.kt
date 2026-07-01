@@ -23,9 +23,9 @@ class LocalEventDataSourceTest {
         return LocalEventDataSource(driver, Dispatchers.Unconfined)
     }
 
-    private fun event(delta: Long, id: Uuid = Uuid.random(), at: Long = 0) = PointEvent(
+    private fun event(delta: Long, id: Uuid = Uuid.random(), at: Long = 0, type: Uuid = typeId) = PointEvent(
         id = id,
-        pointTypeId = typeId,
+        pointTypeId = type,
         delta = delta,
         deviceId = "device-a",
         createdAt = Instant.fromEpochMilliseconds(at),
@@ -71,24 +71,49 @@ class LocalEventDataSourceTest {
     }
 
     @Test
-    fun observeValueSinceCountsOnlyAtOrAfterTheCutoff() = runTest {
+    fun aggregatesGroupsEveryTypeUnderOneOwnerInOneQuery() = runTest {
         val ds = newDataSource()
-        ds.insert(event(2, at = 1_000)) // before the cutoff (yesterday)
-        ds.insert(event(3, at = 5_000)) // at/after the cutoff (today)
-        ds.insert(event(1, at = 9_000))
-        assertEquals(4L, ds.observeValueSince(typeId, sinceMillis = 5_000).first(), "today's window = 3 + 1")
-        assertEquals(6L, ds.observeValueSince(typeId, sinceMillis = 0).first(), "since 0 == all-time")
+        val water = Uuid.random()
+        val anger = Uuid.random()
+
+        // Water: 2 yesterday + (3 + 1) today; latest positive at 9_000.
+        ds.insert(event(2, at = 1_000, type = water))
+        ds.insert(event(3, at = 5_000, type = water))
+        ds.insert(event(1, at = 9_000, type = water))
+        // Anger: one positive then a compensating reset — a decrement is not "activity" for recency.
+        ds.insert(event(1, at = 3_000, type = anger))
+        ds.insert(event(-1, at = 8_000, type = anger))
+
+        val byType = ds.observeAggregates(sinceMillis = 5_000).first()
+
+        assertEquals(setOf(water, anger), byType.keys, "one row per type that has events")
+        assertEquals(6L, byType.getValue(water).total, "all-time sum")
+        assertEquals(4L, byType.getValue(water).todayTotal, "today's window = 3 + 1")
+        assertEquals(9_000L, byType.getValue(water).lastPositiveAt)
+        assertEquals(0L, byType.getValue(anger).total, "1 + (-1) reset")
+        assertEquals(3_000L, byType.getValue(anger).lastPositiveAt, "the reset decrement is not recency")
     }
 
     @Test
-    fun observeLastActivityIsTheLatestPositiveEventOrNull() = runTest {
+    fun aggregatesOmitsTypesWithNoEventsAndNullsRecencyWhenNoPositive() = runTest {
         val ds = newDataSource()
-        assertEquals(null, ds.observeLastActivity(typeId).first(), "no events → no activity")
+        val onlyNegative = Uuid.random()
+        ds.insert(event(-2, at = 4_000, type = onlyNegative))
 
-        ds.insert(event(1, at = 3_000))
-        ds.insert(event(1, at = 8_000))
-        ds.insert(event(-5, at = 9_000)) // a decrement/adjustment is not "activity" for recency
-        assertEquals(8_000L, ds.observeLastActivity(typeId).first())
+        val byType = ds.observeAggregates(sinceMillis = 0).first()
+        assertEquals(null, byType[Uuid.random()], "a type with no events is absent")
+        assertEquals(null, byType.getValue(onlyNegative).lastPositiveAt, "no positive event → null recency")
+        assertEquals(-2L, byType.getValue(onlyNegative).total)
+    }
+
+    @Test
+    fun aggregatesFoldsTodayIntoAllTimeWhenSinceIsZero() = runTest {
+        val ds = newDataSource()
+        ds.insert(event(2, at = 1_000))
+        ds.insert(event(3, at = 9_000))
+        val agg = ds.observeAggregates(sinceMillis = 0).first().getValue(typeId)
+        assertEquals(agg.total, agg.todayTotal, "since 0 → today window == all-time")
+        assertEquals(5L, agg.total)
     }
 
     @Test
