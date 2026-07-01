@@ -35,6 +35,18 @@ SELECT COALESCE(SUM(delta), 0) FROM point_event WHERE owner_id = ? AND point_typ
 eventsForType:
 SELECT * FROM point_event WHERE owner_id = ? AND point_type_id = ? ORDER BY created_at, id;
 
+-- Value accumulated at or after a cutoff — the mode-aware read for a daily type's "today" count (caller
+-- passes local midnight). COALESCE makes an empty window evaluate to 0.
+valueForTypeSince:
+SELECT COALESCE(SUM(delta), 0) FROM point_event
+WHERE owner_id = ? AND point_type_id = ? AND created_at >= ?;
+
+-- Timestamp of the most recent *positive* event — the recency input for an "easing" tile's gauge. COALESCE
+-- to 0 keeps the result a non-null Long (single scalar column); the data source maps 0 (no positive event,
+-- impossible for a real epoch-millis timestamp) back to null.
+lastActivityAt:
+SELECT COALESCE(MAX(created_at), 0) FROM point_event WHERE owner_id = ? AND point_type_id = ? AND delta > 0;
+
 -- The owner's events awaiting upload — sync's push set.
 pendingEvents:
 SELECT * FROM point_event WHERE owner_id = ? AND pending = 1 ORDER BY created_at, id;

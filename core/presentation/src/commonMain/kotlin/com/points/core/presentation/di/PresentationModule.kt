@@ -10,10 +10,11 @@ import com.points.core.data.di.platformDataModule
 import com.points.core.domain.GreetUseCase
 import com.points.core.domain.greetUseCase
 import com.points.core.presentation.counter.CounterComponent
-import com.points.core.presentation.counter.DEFAULT_POINT_TYPE_ID
 import com.points.core.presentation.counter.DefaultCounterComponent
 import com.points.core.presentation.hello.DefaultHelloComponent
 import com.points.core.presentation.hello.HelloComponent
+import com.points.core.presentation.home.DefaultHomeComponent
+import com.points.core.presentation.home.HomeComponent
 import com.points.core.presentation.root.DefaultRootComponent
 import com.points.core.presentation.root.RootComponent
 import com.points.core.presentation.sync.DefaultSyncComponent
@@ -24,11 +25,12 @@ import org.koin.core.parameter.parametersOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
- * Presentation DI: the MVIKotlin store factory and the Decompose components. The counter component
- * injects the individual use cases (bound in [dataModule]) — never the repository. Components take
- * their `ComponentContext` as a runtime parameter.
+ * Presentation DI: the MVIKotlin store factory and the Decompose components. Components inject individual use
+ * cases (bound in [dataModule]) — never a repository. Each component takes its `ComponentContext` plus any
+ * navigation callbacks as runtime parameters (`parametersOf`); the root wires those callbacks to the stack.
  */
 val presentationModule = module {
     factory<GreetUseCase> { greetUseCase() }
@@ -43,15 +45,26 @@ val presentationModule = module {
         )
     }
 
-    factory<CounterComponent> { (componentContext: ComponentContext) ->
+    factory<HomeComponent> { (componentContext: ComponentContext, onOpen: (Uuid) -> Unit) ->
+        DefaultHomeComponent(
+            componentContext = componentContext,
+            storeFactory = get(),
+            observeTiles = get(),
+            mainContext = get<CoroutineDispatcher>(named("main")),
+            onOpenType = onOpen,
+        )
+    }
+
+    factory<CounterComponent> { (componentContext: ComponentContext, pointTypeId: Uuid, onBack: () -> Unit) ->
         DefaultCounterComponent(
             componentContext = componentContext,
             storeFactory = get(),
-            pointTypeId = DEFAULT_POINT_TYPE_ID,
+            pointTypeId = pointTypeId,
             increment = get(),
             decrement = get(),
             observeValue = get(),
             mainContext = get<CoroutineDispatcher>(named("main")),
+            onBackPressed = onBack,
         )
     }
 
@@ -68,8 +81,10 @@ val presentationModule = module {
     factory<RootComponent> { (componentContext: ComponentContext) ->
         DefaultRootComponent(
             componentContext,
-            hello = { childContext -> get<HelloComponent> { parametersOf(childContext) } },
-            counter = { childContext -> get<CounterComponent> { parametersOf(childContext) } },
+            home = { childContext, onOpen -> get<HomeComponent> { parametersOf(childContext, onOpen) } },
+            detail = { childContext, typeId, onBack ->
+                get<CounterComponent> { parametersOf(childContext, typeId, onBack) }
+            },
             sync = { childContext -> get<SyncComponent> { parametersOf(childContext) } },
         )
     }

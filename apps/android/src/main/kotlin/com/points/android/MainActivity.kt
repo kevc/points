@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
@@ -15,6 +16,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -22,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.arkivanov.decompose.retainedComponent
+import com.points.android.ui.HomeScreen
 import com.points.android.ui.theme.PointsTheme
 import com.points.core.domain.SyncStatus
 import com.points.core.presentation.counter.CounterComponent
@@ -34,8 +38,8 @@ import org.koin.core.parameter.parametersOf
 
 /**
  * Single launcher activity. Builds the shared Decompose [RootComponent] (retained across configuration
- * changes) from Koin, renders the counter, and shows an unobtrusive sync-status indicator. Each
- * foreground (`ON_RESUME`) nudges a reconcile, in addition to the on-start trigger in the sync store.
+ * changes) from Koin and renders its navigation stack — the home grid, or a per-type counter when a tile is
+ * tapped — with an unobtrusive sync-status overlay. Each foreground (`ON_RESUME`) nudges a reconcile.
  */
 class MainActivity : ComponentActivity() {
 
@@ -55,13 +59,18 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
+                        Children(stack = root.stack) { child ->
+                            when (val instance = child.instance) {
+                                is RootComponent.Child.Home -> HomeScreen(instance.component)
+                                is RootComponent.Child.Detail -> CounterScreen(instance.component)
+                            }
+                        }
                         SyncStatusIndicator(
                             component = root.sync,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .padding(top = 16.dp),
                         )
-                        CounterScreen(root.counter)
                     }
                 }
             }
@@ -74,25 +83,31 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Per-type counter (the interim detail screen until M5): a back affordance, the value, and ± controls. */
 @Composable
 private fun CounterScreen(component: CounterComponent) {
     val state by component.state.subscribeAsState()
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = state.value.toString(),
-            style = MaterialTheme.typography.displayLarge,
-            modifier = Modifier.semantics { contentDescription = "counter value" },
-        )
-        Row(
-            modifier = Modifier.padding(top = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+            TextButton(onClick = component::onBack) { Text("← Back") }
+        }
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
-            Button(onClick = component::onDecrement) { Text("-") }
-            Button(onClick = component::onIncrement) { Text("+") }
+            Text(
+                text = state.value.toString(),
+                style = MaterialTheme.typography.displayLarge,
+                modifier = Modifier.semantics { contentDescription = "counter value" },
+            )
+            Row(
+                modifier = Modifier.padding(top = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Button(onClick = component::onDecrement) { Text("-") }
+                Button(onClick = component::onIncrement) { Text("+") }
+            }
         }
     }
 }
