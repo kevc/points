@@ -124,8 +124,9 @@ private fun EmptyState(onQuickCreate: (Suggestion) -> Unit, modifier: Modifier =
     }
 }
 
+// `internal` (not `private`) so the `screenshotTest` source set can render the real tile in previews.
 @Composable
-private fun Tile(
+internal fun Tile(
     tile: HomeTile,
     onClick: () -> Unit,
     onIncrement: () -> Unit,
