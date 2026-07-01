@@ -19,6 +19,7 @@ kover = "0.9.1"
 skie = "0.10.6"
 compose-bom = "2024.12.01"
 androidx-activity-compose = "1.9.3"
+compose-screenshot = "0.0.1-alpha06" # tools 31.7.x == AGP 8.7.x; matches this project's AGP
 
 [libraries]
 # Runtime libraries (consumed by feature modules)
@@ -78,3 +79,4 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 skie = { id = "co.touchlab.skie", version.ref = "skie" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+compose-screenshot = { id = "com.android.compose.screenshot", version.ref = "compose-screenshot" }
