@@ -22,7 +22,10 @@ class DatabaseEventStorage(private val dataSource: DataSource) : EventStorage {
 
     init {
         dataSource.connection.use { connection ->
-            connection.createStatement().use { it.execute(CREATE_TABLE) }
+            connection.createStatement().use {
+                it.execute(CREATE_TABLE)
+                it.execute(CREATE_OWNER_SEQ_INDEX)
+            }
         }
     }
 
@@ -58,12 +61,13 @@ class DatabaseEventStorage(private val dataSource: DataSource) : EventStorage {
         }
     }
 
-    override suspend fun eventsSince(ownerId: String, sinceSeq: Long): List<StoredEvent> =
+    override suspend fun eventsSince(ownerId: String, sinceSeq: Long, limit: Int): List<StoredEvent> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
                 connection.prepareStatement(EVENTS_SINCE).use { statement ->
                     statement.setString(1, ownerId)
                     statement.setLong(2, sinceSeq)
+                    statement.setInt(3, limit)
                     statement.executeQuery().use { rs ->
                         buildList { while (rs.next()) add(rs.toStoredEvent()) }
                     }
@@ -112,6 +116,10 @@ class DatabaseEventStorage(private val dataSource: DataSource) : EventStorage {
 
         const val EVENTS_SINCE =
             "SELECT seq, id, owner_id, point_type_id, delta, device_id, created_at " +
-                "FROM point_event WHERE owner_id = ? AND seq > ? ORDER BY seq"
+                "FROM point_event WHERE owner_id = ? AND seq > ? ORDER BY seq LIMIT ?"
+
+        // Keeps the windowed pull (owner_id = ? AND seq > ? ORDER BY seq LIMIT ?) an index range scan.
+        const val CREATE_OWNER_SEQ_INDEX =
+            "CREATE INDEX IF NOT EXISTS idx_point_event_owner_seq ON point_event (owner_id, seq)"
     }
 }

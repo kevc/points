@@ -25,16 +25,18 @@ import io.ktor.server.testing.testApplication
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class EventRoutesTest {
 
-    private fun ApplicationTestBuilder.installPoints() = application {
+    private fun ApplicationTestBuilder.installPoints(syncPageSize: Int = 500) = application {
         val dataSource = h2DataSource("jdbc:h2:mem:routes_${UUID.randomUUID()};DB_CLOSE_DELAY=-1")
         configurePoints(
             StorageContainer(
                 events = DatabaseEventStorage(dataSource),
                 pointTypes = DatabasePointTypeStorage(dataSource),
             ),
+            syncPageSize = syncPageSize,
         )
     }
 
@@ -290,6 +292,70 @@ class EventRoutesTest {
             setBody(SyncRequestDto(OWNER, 0, listOf(PointEventDto("good", OWNER, type, 2, "device-a", "2026-06-04T12:00:00Z"))))
         }.body()
         assertEquals(listOf("good"), ok.events.map { it.id })
+    }
+
+    @Test
+    fun syncPagesLargeEventPullsAndSignalsHasMore() = testApplication {
+        installPoints(syncPageSize = 2)
+        val client = createClient { install(ContentNegotiation) { json() } }
+        fun event(id: String) = PointEventDto(id, OWNER, "type-1", 1, "device-a", "2026-06-04T12:00:00Z")
+
+        // Device A lands 5 events. Its own response is already windowed: 2 events, more to come.
+        val upload: SyncResponseDto = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, 0, (1..5).map { event("e$it") }))
+        }.body()
+        assertEquals(2, upload.events.size, "a pull window never exceeds the page size")
+        assertTrue(upload.hasMoreEvents)
+
+        // A fresh device drains page by page until the server signals it is caught up.
+        val seen = mutableListOf<String>()
+        var cursor = 0L
+        var hasMore = true
+        var pulls = 0
+        while (hasMore) {
+            val page: SyncResponseDto = client.post("/sync") {
+                contentType(ContentType.Application.Json)
+                setBody(SyncRequestDto(OWNER, cursor, emptyList()))
+            }.body()
+            assertTrue(page.events.size <= 2, "every window is bounded")
+            seen += page.events.map { it.id }
+            cursor = page.nextSeq
+            hasMore = page.hasMoreEvents
+            pulls++
+        }
+        assertEquals(listOf("e1", "e2", "e3", "e4", "e5"), seen, "paging yields every event exactly once, in seq order")
+        assertEquals(3, pulls, "5 events at page size 2 drain in 3 windows")
+    }
+
+    @Test
+    fun syncPagesTypePullsAndSignalsHasMore() = testApplication {
+        installPoints(syncPageSize = 2)
+        val client = createClient { install(ContentNegotiation) { json() } }
+        fun type(id: String) = PointTypeDto(
+            id = id, ownerId = OWNER, name = "Type $id", hue = 215, icon = "drop", mode = "DAILY",
+            step = 1, goal = "UP", target = null, unit = "glasses",
+            createdAt = "2026-06-04T12:00:00Z", updatedAt = "2026-06-04T12:00:00Z", deletedAt = null,
+        )
+
+        client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, 0, emptyList(), sinceTypeSeq = 0, pointTypes = listOf(type("t1"), type("t2"), type("t3"))))
+        }
+
+        val first: SyncResponseDto = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, 0, emptyList(), sinceTypeSeq = 0))
+        }.body()
+        assertEquals(listOf("t1", "t2"), first.pointTypes.map { it.id })
+        assertTrue(first.hasMoreTypes)
+
+        val second: SyncResponseDto = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, 0, emptyList(), sinceTypeSeq = first.nextTypeSeq))
+        }.body()
+        assertEquals(listOf("t3"), second.pointTypes.map { it.id })
+        assertEquals(false, second.hasMoreTypes)
     }
 
     private companion object {

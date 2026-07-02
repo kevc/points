@@ -34,7 +34,8 @@ interface EventStorage {
     /**
      * The owner's events with [StoredEvent.seq] greater than [sinceSeq], in ascending `seq` order — the
      * pull half of sync. A client passes the highest `seq` it has already stored and receives only what it
-     * is missing.
+     * is missing, capped at [limit] rows so one long-offline device can't demand an unbounded result; the
+     * caller pages by re-querying from the last returned seq.
      */
-    suspend fun eventsSince(ownerId: String, sinceSeq: Long): List<StoredEvent>
+    suspend fun eventsSince(ownerId: String, sinceSeq: Long, limit: Int = Int.MAX_VALUE): List<StoredEvent>
 }

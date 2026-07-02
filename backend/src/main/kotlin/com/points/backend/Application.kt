@@ -1,5 +1,6 @@
 package com.points.backend
 
+import com.points.backend.api.DEFAULT_SYNC_PAGE_SIZE
 import com.points.backend.api.configureEventRoutes
 import com.points.backend.db.DatabaseEventStorage
 import com.points.backend.db.DatabasePointTypeStorage
@@ -25,9 +26,12 @@ fun Application.module() {
     )
 }
 
-/** Installs plugins and routes against the given [storage]. Tests call this with their own container. */
-fun Application.configurePoints(storage: StorageContainer) {
+/**
+ * Installs plugins and routes against the given [storage]. Tests call this with their own container (and a
+ * small [syncPageSize] to exercise paging without hundreds of rows).
+ */
+fun Application.configurePoints(storage: StorageContainer, syncPageSize: Int = DEFAULT_SYNC_PAGE_SIZE) {
     configureLogging()
     configureSerialization()
-    configureEventRoutes(storage)
+    configureEventRoutes(storage, syncPageSize)
 }

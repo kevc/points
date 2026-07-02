@@ -45,7 +45,7 @@ class OfflineFirstPointTypeRepositoryTest {
      * re-stamp a monotonic type-`seq` on every accepted change (so a rename re-propagates), and return the
      * owner's types newer than the client's type cursor — the same contract `DatabasePointTypeStorage` implements.
      */
-    private class FakeTypeBackend {
+    private class FakeTypeBackend(private val pageSize: Int = Int.MAX_VALUE) {
         var online: Boolean = true
         private val rows = mutableMapOf<String, Pair<Long, PointTypeDto>>() // id -> (seq, dto)
         private var seq = 0L
@@ -62,11 +62,13 @@ class OfflineFirstPointTypeRepositoryTest {
             val missing = rows.values
                 .filter { it.second.ownerId == request.ownerId && it.first > request.sinceTypeSeq }
                 .sortedBy { it.first }
+            val page = missing.take(pageSize)
             return SyncResponseDto(
                 events = emptyList(),
                 nextSeq = request.sinceSeq,
-                pointTypes = missing.map { it.second },
-                nextTypeSeq = missing.maxOfOrNull { it.first } ?: request.sinceTypeSeq,
+                pointTypes = page.map { it.second },
+                nextTypeSeq = page.maxOfOrNull { it.first } ?: request.sinceTypeSeq,
+                hasMoreTypes = missing.size > page.size,
             )
         }
     }
@@ -239,6 +241,29 @@ class OfflineFirstPointTypeRepositoryTest {
 
         assertEquals(listOf("From B"), repoA.observeTypes().first().map { it.name })
         assertEquals(listOf("From B"), repoB.observeTypes().first().map { it.name })
+    }
+
+    @Test
+    fun syncDrainsAMultiPageTypePullInOnePass() = runTest {
+        val backend = FakeTypeBackend(pageSize = 1)
+        val owner = Uuid.random().toString()
+
+        fun dto(name: String) = PointTypeDto(
+            id = Uuid.random().toString(), ownerId = owner, name = name, hue = 215, icon = "drop",
+            mode = "DAILY", step = 1, goal = "UP", target = null, unit = "glasses",
+            createdAt = "2026-06-04T12:00:00Z", updatedAt = "2026-06-04T12:00:00Z", deletedAt = null,
+        )
+        // Another device landed 3 types on the server; each pull window returns at most 1.
+        backend.handle(SyncRequestDto(owner, 0, emptyList(), 0, listOf(dto("One"), dto("Two"), dto("Three"))))
+
+        val repo = repository(apiFor(backend), Local(owner))
+        repo.sync() // a single call keeps pulling until hasMoreTypes is false
+
+        assertEquals(
+            setOf("One", "Two", "Three"),
+            repo.observeTypes().first().map { it.name }.toSet(),
+            "one sync() drains every type page",
+        )
     }
 
     @Test

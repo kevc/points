@@ -31,6 +31,7 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
                 statement.execute(CREATE_TABLE)
+                statement.execute(CREATE_OWNER_SEQ_INDEX)
                 statement.execute(CREATE_SEQ)
                 // Re-seed so the sequence can never lag rows written before it existed (a pre-#99 database):
                 // a lagging sequence would deal already-taken seqs, recreating the silent-skip bug. Runs at
@@ -57,12 +58,13 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
         }
     }
 
-    override suspend fun typesSince(ownerId: String, sinceSeq: Long): List<StoredPointType> =
+    override suspend fun typesSince(ownerId: String, sinceSeq: Long, limit: Int): List<StoredPointType> =
         withContext(Dispatchers.IO) {
             dataSource.connection.use { connection ->
                 connection.prepareStatement(TYPES_SINCE).use { statement ->
                     statement.setString(1, ownerId)
                     statement.setLong(2, sinceSeq)
+                    statement.setInt(3, limit)
                     statement.executeQuery().use { rs ->
                         buildList { while (rs.next()) add(rs.toStoredPointType()) }
                     }
@@ -174,6 +176,10 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
 
         const val TYPES_SINCE =
             "SELECT seq, id, owner_id, name, hue, icon, mode, step, goal, target, unit, created_at, " +
-                "updated_at, deleted_at FROM point_type WHERE owner_id = ? AND seq > ? ORDER BY seq"
+                "updated_at, deleted_at FROM point_type WHERE owner_id = ? AND seq > ? ORDER BY seq LIMIT ?"
+
+        // Keeps the windowed pull (owner_id = ? AND seq > ? ORDER BY seq LIMIT ?) an index range scan.
+        const val CREATE_OWNER_SEQ_INDEX =
+            "CREATE INDEX IF NOT EXISTS idx_point_type_owner_seq ON point_type (owner_id, seq)"
     }
 }

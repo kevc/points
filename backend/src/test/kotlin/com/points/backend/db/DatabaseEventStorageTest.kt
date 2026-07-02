@@ -96,6 +96,18 @@ class DatabaseEventStorageTest {
         assertEquals(listOf("a1"), storage.eventsSince("owner-a", 0).map { it.id })
     }
 
+    @Test
+    fun eventsSinceRespectsTheLimitInSeqOrder() = runTest {
+        val storage = storage()
+        (1..5).forEach { storage.append(event("e$it", 1)) }
+
+        val window = storage.eventsSince(OWNER, 0, limit = 2)
+        assertEquals(listOf("e1", "e2"), window.map { it.id }, "the window is the first N by seq")
+
+        val rest = storage.eventsSince(OWNER, window.last().seq, limit = 10)
+        assertEquals(listOf("e3", "e4", "e5"), rest.map { it.id }, "the next window resumes from the cursor")
+    }
+
     // A duplicate seq is silently skipped by the `seq > cursor` pull — an event that never reaches the
     // other device, with no error anywhere. So uniqueness under concurrent writers is a hard invariant.
     @Test

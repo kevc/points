@@ -29,7 +29,10 @@ import java.time.format.DateTimeParseException
  *
  * The `owner` (query param / request field) stands in for the authenticated principal until M6 replaces it.
  */
-fun Application.configureEventRoutes(storage: StorageContainer) {
+/** Each `/sync` pull half returns at most this many rows per round trip unless the caller overrides it. */
+const val DEFAULT_SYNC_PAGE_SIZE = 500
+
+fun Application.configureEventRoutes(storage: StorageContainer, syncPageSize: Int = DEFAULT_SYNC_PAGE_SIZE) {
     routing {
         post("/events") {
             val event = call.receive<PointEventDto>()
@@ -59,13 +62,16 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
                 it.toStoredOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "malformed point type ${it.id}")
             }
 
-            // Event half: union by id, return what the client is missing.
+            // Event half: union by id, then return a bounded window of what the client is missing.
+            // Fetching pageSize + 1 and trimming is how one query answers "is there more?" precisely.
             events.forEach { storage.events.append(it) }
-            val missingEvents = storage.events.eventsSince(request.ownerId, request.sinceSeq)
+            val eventWindow = storage.events.eventsSince(request.ownerId, request.sinceSeq, syncPageSize + 1)
+            val missingEvents = eventWindow.take(syncPageSize)
 
-            // Type half: merge last-write-wins, return type changes newer than the client's type cursor.
+            // Type half: merge last-write-wins, then a bounded window past the client's type cursor.
             types.forEach { storage.pointTypes.upsert(it) }
-            val missingTypes = storage.pointTypes.typesSince(request.ownerId, request.sinceTypeSeq)
+            val typeWindow = storage.pointTypes.typesSince(request.ownerId, request.sinceTypeSeq, syncPageSize + 1)
+            val missingTypes = typeWindow.take(syncPageSize)
 
             call.respond(
                 SyncResponseDto(
@@ -73,6 +79,8 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
                     nextSeq = missingEvents.maxOfOrNull { it.seq } ?: request.sinceSeq,
                     pointTypes = missingTypes.map { it.toDto() },
                     nextTypeSeq = missingTypes.maxOfOrNull { it.seq } ?: request.sinceTypeSeq,
+                    hasMoreEvents = eventWindow.size > syncPageSize,
+                    hasMoreTypes = typeWindow.size > syncPageSize,
                 ),
             )
         }
