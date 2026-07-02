@@ -240,4 +240,37 @@ class OfflineFirstPointTypeRepositoryTest {
         assertEquals(listOf("From B"), repoA.observeTypes().first().map { it.name })
         assertEquals(listOf("From B"), repoB.observeTypes().first().map { it.name })
     }
+
+    @Test
+    fun syncSkipsMalformedServerTypesAndAppliesTheRest() = runTest {
+        val backend = FakeTypeBackend()
+        val owner = Uuid.random().toString()
+
+        fun dto(id: String, name: String, mode: String) = PointTypeDto(
+            id = id, ownerId = owner, name = name, hue = 215, icon = "drop", mode = mode,
+            step = 1, goal = "UP", target = null, unit = "glasses",
+            createdAt = "2026-06-04T12:00:00Z", updatedAt = "2026-06-04T12:00:00Z", deletedAt = null,
+        )
+
+        // Another actor lands two malformed types (unknown mode enum, unparseable id) and one good one.
+        backend.handle(
+            SyncRequestDto(
+                ownerId = owner,
+                sinceSeq = 0,
+                events = emptyList(),
+                pointTypes = listOf(
+                    dto(Uuid.random().toString(), name = "Poison mode", mode = "NOT_A_MODE"),
+                    dto("not-a-uuid", name = "Poison id", mode = "DAILY"),
+                    dto(Uuid.random().toString(), name = "Water", mode = "DAILY"),
+                ),
+            ),
+        )
+
+        val repo = repository(apiFor(backend), Local(owner))
+        repo.sync() // must not throw — a poisoned type must not wedge every future reconcile
+
+        assertEquals(listOf("Water"), repo.observeTypes().first().map { it.name }, "the well-formed type still applies")
+        repo.sync() // the cursor advanced past the poison: reconciles keep succeeding
+        assertEquals(listOf("Water"), repo.observeTypes().first().map { it.name })
+    }
 }

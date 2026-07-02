@@ -17,6 +17,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.util.getOrFail
 import java.time.Instant
+import java.time.format.DateTimeParseException
 
 /**
  * The (un-authenticated until M6) ledger endpoints, scoped by owner:
@@ -32,7 +33,9 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
     routing {
         post("/events") {
             val event = call.receive<PointEventDto>()
-            storage.events.append(event.toStored())
+            val stored = event.toStoredOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "malformed event ${event.id}")
+            storage.events.append(stored)
             call.respond(HttpStatusCode.Accepted)
         }
 
@@ -46,12 +49,22 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
         post("/sync") {
             val request = call.receive<SyncRequestDto>()
 
+            // Validate the whole batch before persisting any of it: a record the server cannot parse is
+            // the caller's error (400), never a 500 — and rejecting up front means no partial write
+            // sneaks in ahead of the rejection.
+            val events = request.events.map {
+                it.toStoredOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "malformed event ${it.id}")
+            }
+            val types = request.pointTypes.map {
+                it.toStoredOrNull() ?: return@post call.respond(HttpStatusCode.BadRequest, "malformed point type ${it.id}")
+            }
+
             // Event half: union by id, return what the client is missing.
-            request.events.forEach { storage.events.append(it.toStored()) }
+            events.forEach { storage.events.append(it) }
             val missingEvents = storage.events.eventsSince(request.ownerId, request.sinceSeq)
 
             // Type half: merge last-write-wins, return type changes newer than the client's type cursor.
-            request.pointTypes.forEach { storage.pointTypes.upsert(it.toStored()) }
+            types.forEach { storage.pointTypes.upsert(it) }
             val missingTypes = storage.pointTypes.typesSince(request.ownerId, request.sinceTypeSeq)
 
             call.respond(
@@ -68,14 +81,20 @@ fun Application.configureEventRoutes(storage: StorageContainer) {
 
 // The wire carries createdAt as an ISO-8601 string; the server stores it as epoch millis so it can be
 // ordered and range-queried. seq is left at its default — the database assigns the real value on insert.
-private fun PointEventDto.toStored() = StoredEvent(
-    id = id,
-    ownerId = ownerId,
-    pointTypeId = pointTypeId,
-    delta = delta,
-    deviceId = deviceId,
-    createdAt = Instant.parse(createdAt).toEpochMilli(),
-)
+// The *OrNull mappers fold an unparseable timestamp (the only field the server must interpret; ids and
+// enums pass through as opaque strings) to null, which the routes answer with a 400.
+private fun PointEventDto.toStoredOrNull(): StoredEvent? = try {
+    StoredEvent(
+        id = id,
+        ownerId = ownerId,
+        pointTypeId = pointTypeId,
+        delta = delta,
+        deviceId = deviceId,
+        createdAt = Instant.parse(createdAt).toEpochMilli(),
+    )
+} catch (_: DateTimeParseException) {
+    null
+}
 
 private fun StoredEvent.toDto() = PointEventDto(
     id = id,
@@ -88,21 +107,25 @@ private fun StoredEvent.toDto() = PointEventDto(
 
 // Types carry createdAt/updatedAt/deletedAt as ISO-8601 strings on the wire; the server stores epoch millis
 // so updatedAt can be compared for last-write-wins. seq is assigned by the store on upsert (0 on ingest).
-private fun PointTypeDto.toStored() = StoredPointType(
-    id = id,
-    ownerId = ownerId,
-    name = name,
-    hue = hue,
-    icon = icon,
-    mode = mode,
-    step = step,
-    goal = goal,
-    target = target,
-    unit = unit,
-    createdAt = Instant.parse(createdAt).toEpochMilli(),
-    updatedAt = Instant.parse(updatedAt).toEpochMilli(),
-    deletedAt = deletedAt?.let { Instant.parse(it).toEpochMilli() },
-)
+private fun PointTypeDto.toStoredOrNull(): StoredPointType? = try {
+    StoredPointType(
+        id = id,
+        ownerId = ownerId,
+        name = name,
+        hue = hue,
+        icon = icon,
+        mode = mode,
+        step = step,
+        goal = goal,
+        target = target,
+        unit = unit,
+        createdAt = Instant.parse(createdAt).toEpochMilli(),
+        updatedAt = Instant.parse(updatedAt).toEpochMilli(),
+        deletedAt = deletedAt?.let { Instant.parse(it).toEpochMilli() },
+    )
+} catch (_: DateTimeParseException) {
+    null
+}
 
 private fun StoredPointType.toDto() = PointTypeDto(
     id = id,
