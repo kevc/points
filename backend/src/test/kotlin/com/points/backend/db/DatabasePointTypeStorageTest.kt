@@ -14,8 +14,10 @@ import kotlin.test.assertTrue
 
 class DatabasePointTypeStorageTest {
 
-    private fun storage() =
-        DatabasePointTypeStorage(h2DataSource("jdbc:h2:mem:types_${UUID.randomUUID()};DB_CLOSE_DELAY=-1"))
+    private fun storage() = DatabasePointTypeStorage(
+        h2DataSource("jdbc:h2:mem:types_${UUID.randomUUID()};DB_CLOSE_DELAY=-1")
+            .also { MigrationRunner(it).run(pointsMigrations) },
+    )
 
     private fun type(
         id: String,

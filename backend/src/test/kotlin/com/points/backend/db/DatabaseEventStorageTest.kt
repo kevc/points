@@ -13,8 +13,10 @@ import kotlin.test.assertTrue
 
 class DatabaseEventStorageTest {
 
-    private fun storage() =
-        DatabaseEventStorage(h2DataSource("jdbc:h2:mem:store_${UUID.randomUUID()};DB_CLOSE_DELAY=-1"))
+    private fun storage() = DatabaseEventStorage(
+        h2DataSource("jdbc:h2:mem:store_${UUID.randomUUID()};DB_CLOSE_DELAY=-1")
+            .also { MigrationRunner(it).run(pointsMigrations) },
+    )
 
     private fun event(id: String, delta: Long, ownerId: String = OWNER) =
         StoredEvent(id = id, ownerId = ownerId, pointTypeId = TYPE, delta = delta, deviceId = "device-a", createdAt = TS)

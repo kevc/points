@@ -4,6 +4,8 @@ import com.points.backend.api.DEFAULT_SYNC_PAGE_SIZE
 import com.points.backend.api.configureEventRoutes
 import com.points.backend.db.DatabaseEventStorage
 import com.points.backend.db.DatabasePointTypeStorage
+import com.points.backend.db.MigrationRunner
+import com.points.backend.db.pointsMigrations
 import com.points.backend.plugins.configureLogging
 import com.points.backend.plugins.configureSerialization
 import com.points.backend.plugins.h2DataSource
@@ -15,9 +17,13 @@ fun main() {
     embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::module).start(wait = true)
 }
 
-/** Production wiring: H2-backed storage. Both stores share one data source (the same database). */
+/**
+ * Production wiring: H2-backed storage. Both stores share one data source (the same database), whose
+ * schema is brought current by the migration runner before any storage is constructed.
+ */
 fun Application.module() {
     val dataSource = h2DataSource()
+    MigrationRunner(dataSource).run(pointsMigrations)
     configurePoints(
         StorageContainer(
             events = DatabaseEventStorage(dataSource),
