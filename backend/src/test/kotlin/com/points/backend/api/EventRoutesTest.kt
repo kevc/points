@@ -4,6 +4,8 @@ import com.points.backend.StorageContainer
 import com.points.backend.configurePoints
 import com.points.backend.db.DatabaseEventStorage
 import com.points.backend.db.DatabasePointTypeStorage
+import com.points.backend.db.MigrationRunner
+import com.points.backend.db.pointsMigrations
 import com.points.backend.plugins.h2DataSource
 import com.points.shared.contract.PointEventDto
 import com.points.shared.contract.PointTypeDto
@@ -31,6 +33,7 @@ class EventRoutesTest {
 
     private fun ApplicationTestBuilder.installPoints(syncPageSize: Int = 500) = application {
         val dataSource = h2DataSource("jdbc:h2:mem:routes_${UUID.randomUUID()};DB_CLOSE_DELAY=-1")
+        MigrationRunner(dataSource).run(pointsMigrations)
         configurePoints(
             StorageContainer(
                 events = DatabaseEventStorage(dataSource),

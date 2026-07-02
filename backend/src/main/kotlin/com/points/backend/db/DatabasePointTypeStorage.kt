@@ -12,8 +12,9 @@ import java.sql.Types
 import javax.sql.DataSource
 
 /**
- * [PointTypeStorage] over raw JDBC. SQL lives in constants, all access runs on [Dispatchers.IO], and the
- * `point_type` table is created on construction (a real migration runner arrives later).
+ * [PointTypeStorage] over raw JDBC. SQL lives in constants and all access runs on [Dispatchers.IO]. The
+ * `point_type` schema (table + `point_type_seq` sequence) is owned by [pointsMigrations], applied at
+ * startup — never created here.
  *
  * A type is a last-write-wins register, and [upsert] must stay correct under concurrent writers (two devices
  * syncing the same owner), so it is built from single-statement atomics instead of read-then-write:
@@ -26,22 +27,6 @@ import javax.sql.DataSource
  * whose seq is stable.
  */
 class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeStorage {
-
-    init {
-        dataSource.connection.use { connection ->
-            connection.createStatement().use { statement ->
-                statement.execute(CREATE_TABLE)
-                statement.execute(CREATE_OWNER_SEQ_INDEX)
-                statement.execute(CREATE_SEQ)
-                // Re-seed so the sequence can never lag rows written before it existed (a pre-#99 database):
-                // a lagging sequence would deal already-taken seqs, recreating the silent-skip bug. Runs at
-                // construction only — single instance at boot, before any traffic. (#55's migration runner
-                // will own this properly.)
-                val nextSeq = statement.executeQuery(MAX_SEQ).use { rs -> rs.next(); rs.getLong(1) + 1 }
-                statement.execute("ALTER SEQUENCE point_type_seq RESTART WITH $nextSeq")
-            }
-        }
-    }
 
     override suspend fun upsert(type: StoredPointType): Unit = withContext(Dispatchers.IO) {
         dataSource.connection.use { connection ->
@@ -133,30 +118,6 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
         /** Unique/primary-key violation — the same SQLState on H2 and Postgres. */
         const val UNIQUE_VIOLATION = "23505"
 
-        const val CREATE_TABLE = """
-            CREATE TABLE IF NOT EXISTS point_type (
-                seq        BIGINT       NOT NULL,
-                id         VARCHAR(64)  PRIMARY KEY,
-                owner_id   VARCHAR(64)  NOT NULL,
-                name       VARCHAR(255) NOT NULL,
-                hue        INT          NOT NULL,
-                icon       VARCHAR(64)  NOT NULL,
-                mode       VARCHAR(32)  NOT NULL,
-                step       BIGINT       NOT NULL,
-                goal       VARCHAR(32)  NOT NULL,
-                target     BIGINT,
-                unit       VARCHAR(64)  NOT NULL,
-                created_at BIGINT       NOT NULL,
-                updated_at BIGINT       NOT NULL,
-                deleted_at BIGINT
-            )
-        """
-
-        // NEXTVAL('...') works on both engines: native on Postgres, a compatibility function on H2.
-        const val CREATE_SEQ = "CREATE SEQUENCE IF NOT EXISTS point_type_seq"
-
-        const val MAX_SEQ = "SELECT COALESCE(MAX(seq), 0) FROM point_type"
-
         // Accept only a strictly newer write (LWW) and re-stamp seq, atomically in one statement — the row
         // lock makes concurrent updates serialize and re-check the guard, so arrival order can't matter.
         const val UPDATE_IF_NEWER = """
@@ -177,9 +138,5 @@ class DatabasePointTypeStorage(private val dataSource: DataSource) : PointTypeSt
         const val TYPES_SINCE =
             "SELECT seq, id, owner_id, name, hue, icon, mode, step, goal, target, unit, created_at, " +
                 "updated_at, deleted_at FROM point_type WHERE owner_id = ? AND seq > ? ORDER BY seq LIMIT ?"
-
-        // Keeps the windowed pull (owner_id = ? AND seq > ? ORDER BY seq LIMIT ?) an index range scan.
-        const val CREATE_OWNER_SEQ_INDEX =
-            "CREATE INDEX IF NOT EXISTS idx_point_type_owner_seq ON point_type (owner_id, seq)"
     }
 }
