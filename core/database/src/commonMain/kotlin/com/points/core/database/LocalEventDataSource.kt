@@ -108,6 +108,23 @@ class LocalEventDataSource(
         queries.valueForType(ownerId, pointTypeId.toString()).asFlow().mapToOne(queryContext)
 
     /**
+     * Emits this owner's full event ledger for [pointTypeId] (ascending by `created_at`, then `id`),
+     * re-emitting whenever the ledger changes. Backs the M5 trend layer, which buckets the events by local day.
+     */
+    fun observeEventsForType(pointTypeId: Uuid): Flow<List<PointEvent>> =
+        queries.eventsForType(ownerId, pointTypeId.toString()).asFlow().mapToList(queryContext).map { rows ->
+            rows.map { row ->
+                PointEvent(
+                    id = Uuid.parse(row.id),
+                    pointTypeId = Uuid.parse(row.point_type_id),
+                    delta = row.delta,
+                    deviceId = row.device_id,
+                    createdAt = Instant.fromEpochMilliseconds(row.created_at),
+                )
+            }
+        }
+
+    /**
      * Emits this owner's per-type aggregates ([PointAggregate]) keyed by type id from a single grouped query,
      * re-emitting once whenever the ledger changes. [sinceMillis] is the daily "today" cutoff. Backs the home
      * grid, replacing a reactive SUM/recency query per type (the read-path N+1). A type with no rows is absent

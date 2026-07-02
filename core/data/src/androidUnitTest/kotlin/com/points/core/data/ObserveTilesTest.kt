@@ -12,7 +12,13 @@ import com.points.core.network.PointsApiService
 import com.points.core.network.pointsHttpClient
 import io.ktor.client.engine.mock.MockEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -23,7 +29,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.uuid.ExperimentalUuidApi
 
-@OptIn(ExperimentalUuidApi::class)
+@OptIn(ExperimentalUuidApi::class, ExperimentalCoroutinesApi::class)
 class ObserveTilesTest {
 
     private class MutableClock(var instant: Instant) : Clock {
@@ -43,7 +49,8 @@ class ObserveTilesTest {
     private fun setup(clock: MutableClock): Pair<OfflineFirstPointRepository, com.points.core.domain.ObserveTiles> {
         val local = Local()
         val repo = OfflineFirstPointRepository(local.events, local.types, offlineApi, clock)
-        return repo to observeTiles(types = repo, points = repo, clock = clock, zone = zone)
+        // A finite ticker: `combine` still emits on ledger changes; the live-roll path is covered separately.
+        return repo to observeTiles(types = repo, points = repo, clock = clock, zone = { zone }, dayTicks = flowOf(Unit))
     }
 
     @Test
@@ -121,6 +128,36 @@ class ObserveTilesTest {
 
         val names = observe().first().map { it.type.name }.toSet()
         assertEquals(setOf("Water", "Meditation"), names)
+    }
+
+    @Test
+    fun dailyWindowRollsAtMidnightTickWithinOneSubscription() = runTest {
+        // Regression for #108: the "today" window and timezone must be re-derived per emission and re-rolled on
+        // a midnight tick, not captured once at subscription. One continuous subscription, no re-collect.
+        val clock = MutableClock(Instant.parse("2026-06-15T12:00:00Z"))
+        val ticker = MutableSharedFlow<Unit>(replay = 1)
+        val local = Local()
+        val repo = OfflineFirstPointRepository(local.events, local.types, offlineApi, clock)
+        val observe = observeTiles(types = repo, points = repo, clock = clock, zone = { zone }, dayTicks = ticker)
+        val water = repo.create(PointTypeDraft(name = "Water", mode = PointMode.DAILY, target = 8))
+        repo.append(water.id, 5) // logged today (the 15th)
+
+        val emissions = mutableListOf<List<PointTile>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { observe().collect { emissions += it } }
+        ticker.emit(Unit) // first day tick → initial emission on the 15th's window
+        runCurrent()
+        assertEquals(5L, emissions.last().single().value, "today's cups count in the 15th's window")
+
+        // Cross midnight into the 16th on the same subscription; a tick rolls the window forward.
+        clock.instant = Instant.parse("2026-06-16T00:05:00Z")
+        ticker.emit(Unit)
+        runCurrent()
+        assertEquals(0L, emissions.last().single().value, "the 15th's cups drop out once the day rolls")
+
+        // A fresh event on the 16th counts in the new window without any re-subscribe.
+        repo.append(water.id, 2)
+        runCurrent()
+        assertEquals(2L, emissions.last().single().value, "the 16th's cups count in the rolled window")
     }
 
     @Test
