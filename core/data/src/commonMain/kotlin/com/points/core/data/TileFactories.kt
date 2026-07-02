@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalUuidApi::class)
+@file:OptIn(ExperimentalUuidApi::class, ExperimentalCoroutinesApi::class)
 
 package com.points.core.data
 
@@ -12,8 +12,12 @@ import com.points.core.domain.PointType
 import com.points.core.domain.PointTypeRepository
 import com.points.core.domain.milestoneOf
 import com.points.core.domain.ringStateOf
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
@@ -29,31 +33,37 @@ private const val MILLIS_PER_DAY = 86_400_000L
  *
  * Observe-only (no `withContext`): the underlying query already runs on the data source's query context.
  *
- * Note: a daily type's "today" window is pinned to local midnight at subscription time — it does not roll live
- * at midnight, but is recomputed whenever the grid is re-observed (e.g. the app is reopened/foregrounded),
- * which is sufficient for a counting app.
+ * A daily type's "today" window and the current time zone are re-derived on **every** emission, and the window
+ * re-rolls on each local-midnight [dayTicks] pulse — not captured once at subscription — so the grid rolls live
+ * at midnight and reflects a mid-run timezone change (issue #108). [zone] is read live per emission; a tick
+ * re-runs the grouped query with the new day cutoff.
  */
 fun observeTiles(
     types: PointTypeRepository,
     points: PointRepository,
     clock: Clock,
-    zone: TimeZone,
+    zone: ZoneProvider,
+    dayTicks: Flow<Unit>,
 ): ObserveTiles = ObserveTiles {
-    val since = startOfTodayMillis(clock, zone)
-    combine(types.observeTypes(), points.observeAggregates(since)) { list, aggregates ->
+    // Re-subscribe the grouped aggregate with a fresh local-midnight cutoff whenever the day ticks over.
+    val aggregatesToday = dayTicks.flatMapLatest {
+        points.observeAggregates(startOfTodayMillis(clock, zone()))
+    }
+    combine(types.observeTypes(), aggregatesToday) { list, aggregates ->
+        val now = clock.now()
         list.map { type ->
             val agg = aggregates[type.id] ?: PointAggregate.Empty
             val value = if (type.mode == PointMode.DAILY) agg.todayTotal else agg.total
             val lastActivity = if (type.goal == PointGoal.DOWN) agg.lastPositiveAt else null
-            tile(type, value, lastActivity, clock)
+            tile(type, value, lastActivity, now)
         }
     }
 }
 
-private fun tile(type: PointType, value: Long, lastActivity: Long?, clock: Clock): PointTile {
+private fun tile(type: PointType, value: Long, lastActivity: Long?, now: Instant): PointTile {
     // No positive event ever → maximally "calm" (the easing gauge reads full); irrelevant for other modes.
     val daysSinceLast = lastActivity
-        ?.let { ((clock.now().toEpochMilliseconds() - it) / MILLIS_PER_DAY).coerceAtLeast(0L).toInt() }
+        ?.let { ((now.toEpochMilliseconds() - it) / MILLIS_PER_DAY).coerceAtLeast(0L).toInt() }
         ?: Int.MAX_VALUE
     return PointTile(
         type = type,

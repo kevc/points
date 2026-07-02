@@ -23,6 +23,13 @@ interface PointRepository {
     fun observeValue(pointTypeId: Uuid): Flow<Long>
 
     /**
+     * Emits [pointTypeId]'s full event ledger (ascending by time, then id), re-emitting on every change.
+     * The M5 trend layer buckets these by local day; a whole-ledger read is fine for a counting app and keeps
+     * day/timezone bucketing in pure Kotlin (see [com.points.core.domain.pointTrendOf]).
+     */
+    fun observeEvents(pointTypeId: Uuid): Flow<List<PointEvent>>
+
+    /**
      * Emits every point type's aggregated values ([PointAggregate]) keyed by type id, computed in a single
      * grouped query and re-emitting once per ledger change — not once per observed type. Backs the home grid,
      * collapsing what would otherwise be a per-tile SUM/recency flow each. [sinceMillis] is the day cutoff for

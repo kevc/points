@@ -59,6 +59,9 @@ class OfflineFirstPointRepository(
 
     override fun observeValue(pointTypeId: Uuid): Flow<Long> = local.observeValue(pointTypeId)
 
+    override fun observeEvents(pointTypeId: Uuid): Flow<List<PointEvent>> =
+        local.observeEventsForType(pointTypeId)
+
     override fun observeAggregates(sinceMillis: Long): Flow<Map<Uuid, PointAggregate>> =
         local.observeAggregates(sinceMillis)
 

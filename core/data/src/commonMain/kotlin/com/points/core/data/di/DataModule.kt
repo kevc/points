@@ -4,10 +4,12 @@ import com.points.core.data.DatabaseDriverFactory
 import com.points.core.data.OfflineFirstPointRepository
 import com.points.core.data.SyncCoordinator
 import com.points.core.data.createPointType
+import com.points.core.data.dayTicks
 import com.points.core.data.decrementPoint
 import com.points.core.data.deletePointType
 import com.points.core.data.editPointType
 import com.points.core.data.incrementPoint
+import com.points.core.data.observePointTrend
 import com.points.core.data.observePointTypes
 import com.points.core.data.observePointValue
 import com.points.core.data.observeSyncStatus
@@ -22,6 +24,7 @@ import com.points.core.domain.DecrementPoint
 import com.points.core.domain.DeletePointType
 import com.points.core.domain.EditPointType
 import com.points.core.domain.IncrementPoint
+import com.points.core.domain.ObservePointTrend
 import com.points.core.domain.ObservePointTypes
 import com.points.core.domain.ObservePointValue
 import com.points.core.domain.ObserveSyncStatus
@@ -69,13 +72,25 @@ val dataModule: Module = module {
     factory<RestorePointType> { restorePointType(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<ResetPointType> { resetPointType(get(), get<CoroutineDispatcher>(named("io"))) }
     factory<ObservePointTypes> { observePointTypes(get()) }
-    // The home read model: active types × mode-aware value × recency → ring, via the pure domain math.
+    // The home read model: active types × mode-aware value × recency → ring, via the pure domain math. The
+    // day window/timezone are read live and the grid re-rolls at local midnight via dayTicks (issue #108).
     factory<ObserveTiles> {
         observeTiles(
             types = get(),
             points = get(),
             clock = Clock.System,
-            zone = TimeZone.currentSystemDefault(),
+            zone = TimeZone.Companion::currentSystemDefault,
+            dayTicks = dayTicks(Clock.System, TimeZone.Companion::currentSystemDefault),
+        )
+    }
+    // The Detail read model: the point's ledger bucketed by local day → value, series, stats, heatmap, insight.
+    factory<ObservePointTrend> {
+        observePointTrend(
+            types = get(),
+            points = get(),
+            clock = Clock.System,
+            zone = TimeZone.Companion::currentSystemDefault,
+            dayTicks = dayTicks(Clock.System, TimeZone.Companion::currentSystemDefault),
         )
     }
     // One coordinator per app: it holds the sync status stream all observers share. `ConnectivityMonitor`
