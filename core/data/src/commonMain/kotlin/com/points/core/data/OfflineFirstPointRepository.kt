@@ -27,9 +27,11 @@ import kotlin.uuid.Uuid
  * Writes do *not* sync — pushing is the `SyncCoordinator`'s job, which observes the pending count and drives
  * [sync].
  *
- * [sync] is the one batch round trip for both halves: it uploads pending events **and** pending type changes
- * and pulls the ones this device is missing, then advances both cursors. Events merge additively (union by
- * id, PN-counter CRDT); types merge **last-write-wins by `updatedAt`** (a type is mutable, so the newer edit
+ * [sync] reconciles both halves in **bounded** round trips: pending events and type changes are uploaded in
+ * chunks of [batchSize], and the pull side loops while the server signals `hasMoreEvents`/`hasMoreTypes`, so
+ * a device offline for weeks drains in several small requests instead of one unbounded one. Cursors advance
+ * per round trip, so an interrupted drain resumes where it left off. Events merge additively (union by id,
+ * PN-counter CRDT); types merge **last-write-wins by `updatedAt`** (a type is mutable, so the newer edit
  * wins — see [PointType]). Deleting a type is a tombstone, never a destructive remove.
  */
 @OptIn(ExperimentalUuidApi::class)
@@ -38,6 +40,7 @@ class OfflineFirstPointRepository(
     private val types: LocalPointTypeDataSource,
     private val api: PointsApiService,
     private val clock: Clock = Clock.System,
+    private val batchSize: Int = DEFAULT_SYNC_BATCH_SIZE,
 ) : PointRepository, PointTypeRepository {
 
     override suspend fun append(pointTypeId: Uuid, delta: Long): PointEvent {
@@ -112,35 +115,54 @@ class OfflineFirstPointRepository(
     override fun observeTypes(): Flow<List<PointType>> = types.observeTypes()
 
     override suspend fun sync() {
-        val pendingEvents = local.pendingEvents()
-        val pendingTypes = types.pendingTypes()
-        val response = api.sync(
-            SyncRequestDto(
-                ownerId = local.ownerId,
-                sinceSeq = local.syncCursor(),
-                events = pendingEvents.map { it.toDto(local.ownerId) },
-                sinceTypeSeq = types.typeCursor(),
-                pointTypes = pendingTypes.map { it.toDto(local.ownerId) },
-            ),
-        )
+        val eventChunks = ArrayDeque(local.pendingEvents().chunked(batchSize))
+        val typeChunks = ArrayDeque(types.pendingTypes().chunked(batchSize))
 
-        // Event half: union by id, advance the event cursor. A record that fails to parse is skipped, not
-        // fatal: it would fail identically on every future pull, so throwing here would wedge every
-        // reconcile behind one poisoned record. The cursor still advances past it.
-        response.events.forEach { dto ->
-            val event = dto.toPointEventOrNull()
-            if (event != null) local.applySynced(event) else println("Points sync: skipping malformed event ${dto.id}")
-        }
-        local.clearPending(pendingEvents.map { it.id.toString() })
-        local.setCursor(response.nextSeq)
+        while (true) {
+            val eventChunk = eventChunks.removeFirstOrNull().orEmpty()
+            val typeChunk = typeChunks.removeFirstOrNull().orEmpty()
+            val sinceSeq = local.syncCursor()
+            val sinceTypeSeq = types.typeCursor()
+            val response = api.sync(
+                SyncRequestDto(
+                    ownerId = local.ownerId,
+                    sinceSeq = sinceSeq,
+                    events = eventChunk.map { it.toDto(local.ownerId) },
+                    sinceTypeSeq = sinceTypeSeq,
+                    pointTypes = typeChunk.map { it.toDto(local.ownerId) },
+                ),
+            )
 
-        // Type half: last-write-wins by updatedAt, advance the type cursor. Same skip-don't-throw rule.
-        response.pointTypes.forEach { dto ->
-            val type = dto.toPointTypeOrNull()
-            if (type != null) types.applySynced(type) else println("Points sync: skipping malformed type ${dto.id}")
+            // Event half: union by id, advance the event cursor. A record that fails to parse is skipped,
+            // not fatal: it would fail identically on every future pull, so throwing here would wedge every
+            // reconcile behind one poisoned record. The cursor still advances past it.
+            response.events.forEach { dto ->
+                val event = dto.toPointEventOrNull()
+                if (event != null) local.applySynced(event) else println("Points sync: skipping malformed event ${dto.id}")
+            }
+            local.clearPending(eventChunk.map { it.id.toString() })
+            local.setCursor(response.nextSeq)
+
+            // Type half: last-write-wins by updatedAt, advance the type cursor. Same skip-don't-throw rule.
+            response.pointTypes.forEach { dto ->
+                val type = dto.toPointTypeOrNull()
+                if (type != null) types.applySynced(type) else println("Points sync: skipping malformed type ${dto.id}")
+            }
+            types.clearPending(typeChunk.map { it.id.toString() })
+            types.setTypeCursor(response.nextTypeSeq)
+
+            val moreToPush = eventChunks.isNotEmpty() || typeChunks.isNotEmpty()
+            val moreToPull = response.hasMoreEvents || response.hasMoreTypes
+            if (!moreToPush && !moreToPull) break
+            // A server claiming "more" without ever advancing a cursor would spin this loop forever —
+            // treat no progress with nothing left to push as drained rather than trusting the flag.
+            if (!moreToPush && response.nextSeq == sinceSeq && response.nextTypeSeq == sinceTypeSeq) break
         }
-        types.clearPending(pendingTypes.map { it.id.toString() })
-        types.setTypeCursor(response.nextTypeSeq)
+    }
+
+    private companion object {
+        /** Upload chunk size — mirrors the server's pull page size so both directions stay bounded. */
+        const val DEFAULT_SYNC_BATCH_SIZE = 500
     }
 }
 

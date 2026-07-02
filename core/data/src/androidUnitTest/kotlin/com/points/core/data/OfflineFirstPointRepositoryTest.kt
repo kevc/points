@@ -39,21 +39,25 @@ class OfflineFirstPointRepositoryTest {
      * Type sync is exercised separately in [OfflineFirstPointTypeRepositoryTest]; the request's `pointTypes`
      * default to empty here, so this fake stays event-only.
      */
-    private class FakeSyncBackend {
+    private class FakeSyncBackend(private val pageSize: Int = Int.MAX_VALUE) {
         var online: Boolean = true
+        val uploadSizes = mutableListOf<Int>() // events per request, to assert client-side chunking
         private val rows = mutableListOf<Pair<Long, PointEventDto>>()
         private var seq = 0L
 
         fun handle(request: SyncRequestDto): SyncResponseDto {
+            uploadSizes += request.events.size
             request.events.forEach { event ->
                 if (rows.none { it.second.id == event.id }) rows += ++seq to event
             }
             val missing = rows
                 .filter { it.second.ownerId == request.ownerId && it.first > request.sinceSeq }
                 .sortedBy { it.first }
+            val page = missing.take(pageSize)
             return SyncResponseDto(
-                events = missing.map { it.second },
-                nextSeq = missing.maxOfOrNull { it.first } ?: request.sinceSeq,
+                events = page.map { it.second },
+                nextSeq = page.maxOfOrNull { it.first } ?: request.sinceSeq,
+                hasMoreEvents = missing.size > page.size,
             )
         }
     }
@@ -81,8 +85,12 @@ class OfflineFirstPointRepositoryTest {
 
     private fun localFor(ownerId: String? = null): Local = Local(ownerId)
 
-    private fun repository(api: PointsApiService, local: Local = localFor()): PointRepository =
-        OfflineFirstPointRepository(local = local.events, types = local.types, api = api)
+    private fun repository(
+        api: PointsApiService,
+        local: Local = localFor(),
+        batchSize: Int = 500,
+    ): PointRepository =
+        OfflineFirstPointRepository(local = local.events, types = local.types, api = api, batchSize = batchSize)
 
     private val offlineApi = PointsApiService(
         pointsHttpClient(MockEngine { error("offline") }),
@@ -189,6 +197,43 @@ class OfflineFirstPointRepositoryTest {
         repo.sync()
         repo.sync()
         assertEquals(4L, repo.observeValue(typeId).first())
+    }
+
+    @Test
+    fun syncDrainsAMultiPagePullInOnePass() = runTest {
+        val backend = FakeSyncBackend(pageSize = 2)
+        val local = localFor()
+        // Another device landed 5 events on the server; the server hands them out at most 2 per window.
+        backend.handle(
+            SyncRequestDto(
+                ownerId = local.events.ownerId,
+                sinceSeq = 0,
+                events = (1..5).map {
+                    PointEventDto(Uuid.random().toString(), local.events.ownerId, typeId.toString(), 1, "device-x", "2026-06-04T12:00:00Z")
+                },
+            ),
+        )
+
+        val repo = repository(apiFor(backend), local)
+        repo.sync() // a single call keeps pulling until hasMoreEvents is false
+
+        assertEquals(5L, repo.observeValue(typeId).first(), "one sync() drains every page")
+    }
+
+    @Test
+    fun syncUploadsPendingInBoundedChunks() = runTest {
+        val backend = FakeSyncBackend()
+        val local = localFor()
+        val repo = repository(apiFor(backend), local, batchSize = 2)
+        repeat(5) { repo.append(typeId, 1) }
+
+        repo.sync()
+
+        val uploads = backend.uploadSizes.filter { it > 0 }
+        assertTrue(uploads.all { it <= 2 }, "no single request may exceed the batch size: ${backend.uploadSizes}")
+        assertEquals(5, uploads.sum(), "every pending event is pushed across the chunks")
+        assertTrue(local.events.pendingEvents().isEmpty(), "all chunks confirmed — nothing left pending")
+        assertEquals(5L, repo.observeValue(typeId).first())
     }
 
     @Test

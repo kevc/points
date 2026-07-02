@@ -38,7 +38,8 @@ interface PointTypeStorage {
 
     /**
      * The owner's types with [StoredPointType.seq] greater than [sinceSeq], in ascending `seq` order — the
-     * pull half of type sync. Includes tombstoned types so deletes propagate.
+     * pull half of type sync. Includes tombstoned types so deletes propagate. Capped at [limit] rows; the
+     * caller pages by re-querying from the last returned seq.
      */
-    suspend fun typesSince(ownerId: String, sinceSeq: Long): List<StoredPointType>
+    suspend fun typesSince(ownerId: String, sinceSeq: Long, limit: Int = Int.MAX_VALUE): List<StoredPointType>
 }

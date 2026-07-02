@@ -78,15 +78,22 @@ data class SyncRequestDto(
 )
 
 /**
- * The batch sync response: the events the client was missing, and the cursor to send next time.
+ * The batch sync response: a **window** of the events the client was missing, and the cursor to send next
+ * time. The server bounds each pull to a page, so a long-offline device drains in several round trips
+ * instead of one unbounded response — [hasMoreEvents]/[hasMoreTypes] tell the client to immediately sync
+ * again from the advanced cursors until both are false.
  *
- * @property events the owner's events with `seq` greater than the request's `sinceSeq`, ascending.
+ * @property events the owner's events with `seq` greater than the request's `sinceSeq`, ascending, capped
+ *   at the server's page size.
  * @property nextSeq the highest `seq` in [events] (or the request's `sinceSeq` if none) — the client stores
  *   it as its new cursor.
  * @property pointTypes the owner's type changes with type-`seq` greater than the request's `sinceTypeSeq`,
- *   ascending; the client applies them last-write-wins. Defaults to empty.
+ *   ascending, capped at the server's page size; the client applies them last-write-wins. Defaults to empty.
  * @property nextTypeSeq the highest type-`seq` in [pointTypes] (or the request's `sinceTypeSeq` if none) —
  *   the client's new type cursor. Defaults to 0.
+ * @property hasMoreEvents whether events beyond this page remain on the server ([events] was truncated at
+ *   the page size). Defaults to false so a pre-paging response reads as a complete pull.
+ * @property hasMoreTypes the same signal for the type half.
  */
 @Serializable
 data class SyncResponseDto(
@@ -94,4 +101,6 @@ data class SyncResponseDto(
     val nextSeq: Long,
     val pointTypes: List<PointTypeDto> = emptyList(),
     val nextTypeSeq: Long = 0,
+    val hasMoreEvents: Boolean = false,
+    val hasMoreTypes: Boolean = false,
 )

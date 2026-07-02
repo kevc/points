@@ -96,6 +96,18 @@ class DatabasePointTypeStorageTest {
         assertEquals(forA.map { it.seq }.sorted(), forA.map { it.seq }) // ascending
     }
 
+    @Test
+    fun typesSinceRespectsTheLimitInSeqOrder() = runTest {
+        val storage = storage()
+        (1..5).forEach { storage.upsert(type("t$it")) }
+
+        val window = storage.typesSince(OWNER, 0, limit = 2)
+        assertEquals(listOf("t1", "t2"), window.map { it.id }, "the window is the first N by seq")
+
+        val rest = storage.typesSince(OWNER, window.last().seq, limit = 10)
+        assertEquals(listOf("t3", "t4", "t5"), rest.map { it.id }, "the next window resumes from the cursor")
+    }
+
     // A duplicate seq is silently skipped by the `seq > cursor` pull — a type change that never reaches
     // the other device, with no error anywhere. So uniqueness under concurrent writers is a hard invariant.
     @Test
