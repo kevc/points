@@ -124,13 +124,21 @@ class OfflineFirstPointRepository(
             ),
         )
 
-        // Event half: union by id, advance the event cursor.
-        response.events.forEach { local.applySynced(it.toPointEvent()) }
+        // Event half: union by id, advance the event cursor. A record that fails to parse is skipped, not
+        // fatal: it would fail identically on every future pull, so throwing here would wedge every
+        // reconcile behind one poisoned record. The cursor still advances past it.
+        response.events.forEach { dto ->
+            val event = dto.toPointEventOrNull()
+            if (event != null) local.applySynced(event) else println("Points sync: skipping malformed event ${dto.id}")
+        }
         local.clearPending(pendingEvents.map { it.id.toString() })
         local.setCursor(response.nextSeq)
 
-        // Type half: last-write-wins by updatedAt, advance the type cursor.
-        response.pointTypes.forEach { types.applySynced(it.toPointType()) }
+        // Type half: last-write-wins by updatedAt, advance the type cursor. Same skip-don't-throw rule.
+        response.pointTypes.forEach { dto ->
+            val type = dto.toPointTypeOrNull()
+            if (type != null) types.applySynced(type) else println("Points sync: skipping malformed type ${dto.id}")
+        }
         types.clearPending(pendingTypes.map { it.id.toString() })
         types.setTypeCursor(response.nextTypeSeq)
     }
@@ -146,14 +154,20 @@ private fun PointEvent.toDto(ownerId: String) = PointEventDto(
     createdAt = createdAt.toString(),
 )
 
+// Uuid.parse, Instant.parse, and enum valueOf all signal a malformed field as IllegalArgumentException;
+// the *OrNull mappers fold that to null so the sync merge can skip the record instead of failing the batch.
 @OptIn(ExperimentalUuidApi::class)
-private fun PointEventDto.toPointEvent() = PointEvent(
-    id = Uuid.parse(id),
-    pointTypeId = Uuid.parse(pointTypeId),
-    delta = delta,
-    deviceId = deviceId,
-    createdAt = Instant.parse(createdAt),
-)
+private fun PointEventDto.toPointEventOrNull(): PointEvent? = try {
+    PointEvent(
+        id = Uuid.parse(id),
+        pointTypeId = Uuid.parse(pointTypeId),
+        delta = delta,
+        deviceId = deviceId,
+        createdAt = Instant.parse(createdAt),
+    )
+} catch (_: IllegalArgumentException) {
+    null
+}
 
 @OptIn(ExperimentalUuidApi::class)
 private fun PointType.toDto(ownerId: String) = PointTypeDto(
@@ -173,17 +187,21 @@ private fun PointType.toDto(ownerId: String) = PointTypeDto(
 )
 
 @OptIn(ExperimentalUuidApi::class)
-private fun PointTypeDto.toPointType() = PointType(
-    id = Uuid.parse(id),
-    name = name,
-    hue = hue,
-    icon = icon,
-    mode = PointMode.valueOf(mode),
-    step = step,
-    goal = PointGoal.valueOf(goal),
-    target = target,
-    unit = unit,
-    createdAt = Instant.parse(createdAt),
-    updatedAt = Instant.parse(updatedAt),
-    deletedAt = deletedAt?.let { Instant.parse(it) },
-)
+private fun PointTypeDto.toPointTypeOrNull(): PointType? = try {
+    PointType(
+        id = Uuid.parse(id),
+        name = name,
+        hue = hue,
+        icon = icon,
+        mode = PointMode.valueOf(mode),
+        step = step,
+        goal = PointGoal.valueOf(goal),
+        target = target,
+        unit = unit,
+        createdAt = Instant.parse(createdAt),
+        updatedAt = Instant.parse(updatedAt),
+        deletedAt = deletedAt?.let { Instant.parse(it) },
+    )
+} catch (_: IllegalArgumentException) {
+    null
+}

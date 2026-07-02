@@ -192,6 +192,31 @@ class OfflineFirstPointRepositoryTest {
     }
 
     @Test
+    fun syncSkipsMalformedServerEventsAndAppliesTheRest() = runTest {
+        val backend = FakeSyncBackend()
+        val local = localFor()
+        // Another actor lands one well-formed and two malformed events on the server for this owner.
+        backend.handle(
+            SyncRequestDto(
+                ownerId = local.events.ownerId,
+                sinceSeq = 0,
+                events = listOf(
+                    PointEventDto("not-a-uuid", local.events.ownerId, typeId.toString(), 1, "device-x", "2026-06-04T12:00:00Z"),
+                    PointEventDto(Uuid.random().toString(), local.events.ownerId, typeId.toString(), 3, "device-x", "not-a-timestamp"),
+                    PointEventDto(Uuid.random().toString(), local.events.ownerId, typeId.toString(), 5, "device-x", "2026-06-04T12:00:00Z"),
+                ),
+            ),
+        )
+
+        val repo = repository(apiFor(backend), local)
+        repo.sync() // must not throw — one poisoned record must not wedge every future reconcile
+
+        assertEquals(5L, repo.observeValue(typeId).first(), "the well-formed record still applies")
+        repo.sync() // the cursor advanced past the poison: reconciles keep succeeding, value stays put
+        assertEquals(5L, repo.observeValue(typeId).first())
+    }
+
+    @Test
     fun syncPointEventsFactoryReconcilesThroughTheUseCase() = runTest {
         val backend = FakeSyncBackend().apply { online = false }
         val local = localFor()

@@ -214,6 +214,84 @@ class EventRoutesTest {
         assertEquals(listOf("a1"), forA.pointTypes.map { it.id })
     }
 
+    @Test
+    fun malformedEventTimestampOnPostEventsReturns400() = testApplication {
+        installPoints()
+        val client = createClient { install(ContentNegotiation) { json() } }
+
+        val response = client.post("/events") {
+            contentType(ContentType.Application.Json)
+            setBody(PointEventDto("e1", OWNER, "type-1", 1, "device-a", "not-a-timestamp"))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status, "an unparseable createdAt is the caller's error, not a 500")
+    }
+
+    @Test
+    fun malformedEventTimestampInSyncReturns400WithoutPersistingTheBatch() = testApplication {
+        installPoints()
+        val client = createClient { install(ContentNegotiation) { json() } }
+        val type = "type-1"
+
+        val response = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                SyncRequestDto(
+                    OWNER,
+                    sinceSeq = 0,
+                    events = listOf(
+                        PointEventDto("good", OWNER, type, 1, "device-a", "2026-06-04T12:00:00Z"),
+                        PointEventDto("bad", OWNER, type, 1, "device-a", "not-a-timestamp"),
+                    ),
+                ),
+            )
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+
+        // The batch is validated before anything persists — no partial write slipped in ahead of the 400.
+        val value: PointValueDto = client.get("/points/$type") { parameter("owner", OWNER) }.body()
+        assertEquals(0L, value.value)
+    }
+
+    @Test
+    fun malformedTypeTimestampInSyncReturns400() = testApplication {
+        installPoints()
+        val client = createClient { install(ContentNegotiation) { json() } }
+
+        val response = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                SyncRequestDto(
+                    OWNER, 0, emptyList(), sinceTypeSeq = 0,
+                    pointTypes = listOf(
+                        PointTypeDto(
+                            id = "t1", ownerId = OWNER, name = "Water", hue = 215, icon = "drop", mode = "DAILY",
+                            step = 1, goal = "UP", target = 8, unit = "glasses",
+                            createdAt = "2026-06-04T12:00:00Z", updatedAt = "not-a-timestamp", deletedAt = null,
+                        ),
+                    ),
+                ),
+            )
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun aValidSyncStillSucceedsAfterARejectedOne() = testApplication {
+        installPoints()
+        val client = createClient { install(ContentNegotiation) { json() } }
+        val type = "type-1"
+
+        client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, 0, listOf(PointEventDto("bad", OWNER, type, 1, "device-a", "nope"))))
+        }
+        val ok: SyncResponseDto = client.post("/sync") {
+            contentType(ContentType.Application.Json)
+            setBody(SyncRequestDto(OWNER, 0, listOf(PointEventDto("good", OWNER, type, 2, "device-a", "2026-06-04T12:00:00Z"))))
+        }.body()
+        assertEquals(listOf("good"), ok.events.map { it.id })
+    }
+
     private companion object {
         const val OWNER = "owner-1"
     }
