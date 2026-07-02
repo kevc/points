@@ -8,7 +8,6 @@ import com.points.core.domain.CreatePointType
 import com.points.core.domain.DecrementPoint
 import com.points.core.domain.DeletePointType
 import com.points.core.domain.EditPointType
-import com.points.core.domain.GreetUseCase
 import com.points.core.domain.IncrementPoint
 import com.points.core.domain.ObservePointTypes
 import com.points.core.domain.ObservePointValue
@@ -117,7 +116,6 @@ class DiGraphTest {
             modules(presentationModule, testDispatcherModule, fakeDataModule)
         }.koin
 
-        assertNotNull(koin.get<GreetUseCase>())
         assertNotNull(koin.get<StoreFactory>())
 
         val context = DefaultComponentContext(lifecycle = LifecycleRegistry())

@@ -7,14 +7,10 @@ import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import com.points.core.data.di.dataModule
 import com.points.core.data.di.platformDataModule
-import com.points.core.domain.GreetUseCase
-import com.points.core.domain.greetUseCase
 import com.points.core.presentation.counter.CounterComponent
 import com.points.core.presentation.counter.DefaultCounterComponent
 import com.points.core.presentation.edit.CreateEditComponent
 import com.points.core.presentation.edit.DefaultCreateEditComponent
-import com.points.core.presentation.hello.DefaultHelloComponent
-import com.points.core.presentation.hello.HelloComponent
 import com.points.core.presentation.home.DefaultHomeComponent
 import com.points.core.presentation.home.HomeComponent
 import com.points.core.presentation.root.DefaultRootComponent
@@ -35,17 +31,7 @@ import kotlin.uuid.Uuid
  * navigation callbacks as runtime parameters (`parametersOf`); the root wires those callbacks to the stack.
  */
 val presentationModule = module {
-    factory<GreetUseCase> { greetUseCase() }
     single<StoreFactory> { DefaultStoreFactory() }
-
-    factory<HelloComponent> { (componentContext: ComponentContext) ->
-        DefaultHelloComponent(
-            componentContext = componentContext,
-            storeFactory = get(),
-            greet = get(),
-            mainContext = get<CoroutineDispatcher>(named("main")),
-        )
-    }
 
     factory<HomeComponent> { (componentContext: ComponentContext, onOpen: (Uuid) -> Unit, onCreate: () -> Unit) ->
         DefaultHomeComponent(
