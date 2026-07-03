@@ -184,7 +184,7 @@ private func tileHaptic() {
 /// The tile gauge: a track, a progress arc (the point's hue when accented, else calm ink), scale ticks, and
 /// an over-target marker — the SwiftUI rendering of the domain `RingState`. `content` sits at the center.
 private struct RingView<Content: View>: View {
-    let ring: DomainRingState
+    let ring: RingState
     let hue: PointHue
     @ViewBuilder var content: () -> Content
 
@@ -263,80 +263,11 @@ private final class RootStackModel: ObservableObject {
     }
 }
 
-// MARK: - Per-point detail (interim counter rendering over the M5 DetailComponent; full trend UI is #129)
-
-private struct DetailView: View {
-    let component: DetailComponent
-    @StateObject private var model: DetailModel
-
-    init(component: DetailComponent) {
-        self.component = component
-        _model = StateObject(wrappedValue: DetailModel(component))
-    }
-
-    var body: some View {
-        let s = model.state
-        VStack {
-            HStack {
-                Button("← Back") { component.onBack() }
-                    .font(.bodyUI)
-                    .foregroundColor(.inkDim)
-                Spacer()
-                Button("Edit") { component.onEdit() }
-                    .font(.bodyUI)
-                    .foregroundColor(.inkDim)
-            }
-            .padding()
-
-            Spacer()
-            Text("\(s.value)")
-                .font(.counter)
-                .monospacedDigit()
-                .foregroundColor(PointHue.forDegrees(Int(s.hue)).color)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-
-            HStack(spacing: 24) {
-                Button("−") { component.onDecrement() }
-                Button("+") { component.onIncrement() }
-            }
-            .font(.titleLg)
-            .buttonStyle(.bordered)
-            .padding(.top, 24)
-            .disabled(s.deleted)
-
-            HStack(spacing: 16) {
-                Button("Reset to zero") { component.onReset() }
-                Button("Remove") { component.onDelete() }
-            }
-            .font(.bodyUI)
-            .foregroundColor(.inkDim)
-            .padding(.top, 16)
-            .disabled(s.deleted)
-
-            Spacer()
-
-            if let label = s.undoLabel {
-                HStack {
-                    Text(label).foregroundColor(.ink)
-                    Spacer()
-                    Button("Undo") { component.onUndo() }
-                }
-                .font(.bodyUI)
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Color.surfaceHigh)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(16)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 // MARK: - Sync status
 
 /// Compact, secondary sync-status indicator: a spinner while syncing, otherwise a short label.
 private struct SyncStatusView: View {
-    let status: DomainSyncStatus
+    let status: SyncStatus
 
     var body: some View {
         HStack(spacing: 6) {
@@ -362,27 +293,9 @@ private struct SyncStatusView: View {
     }
 }
 
-/// Bridges the shared Decompose `Value<DetailStore.State>` into an observable SwiftUI model.
-private final class DetailModel: ObservableObject {
-    @Published var state: DetailStoreState
-    private var cancellation: DecomposeCancellation?
-
-    init(_ component: DetailComponent) {
-        let s = component.state
-        state = s.value
-        cancellation = s.subscribe { [weak self] newState in
-            self?.state = newState
-        }
-    }
-
-    deinit {
-        cancellation?.cancel()
-    }
-}
-
 /// Bridges the shared Decompose `Value<SyncStore.State>` into an observable SwiftUI model.
 private final class SyncModel: ObservableObject {
-    @Published var status: DomainSyncStatus
+    @Published var status: SyncStatus
     private var cancellation: DecomposeCancellation?
 
     init(_ component: SyncComponent) {

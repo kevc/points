@@ -12,6 +12,9 @@
 		16D0A698130D675A5EA4188D /* HankenGrotesk-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 54B3E1B925BD9A7935F8A5F9 /* HankenGrotesk-ExtraBold.ttf */; };
 		19B7E8469E13BA2C2D417D1C /* HankenGrotesk-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4697B3A346615436FFF6E0CF /* HankenGrotesk-SemiBold.ttf */; };
 		6106FE144176836F72248741 /* HankenGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2BEBCB093CB497D2CDE36B7C /* HankenGrotesk-Medium.ttf */; };
+		9E11A2B3C4D5E6F708192A01 /* DetailCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E11A2B3C4D5E6F708192A02 /* DetailCharts.swift */; };
+		9E11A2B3C4D5E6F708192A03 /* DetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E11A2B3C4D5E6F708192A04 /* DetailScreen.swift */; };
+		9E11A2B3C4D5E6F708192A05 /* StrokeIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E11A2B3C4D5E6F708192A06 /* StrokeIcon.swift */; };
 		A2B585020292FD3CFE189E26 /* PointsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09650A843CA901F368823E9 /* PointsApp.swift */; };
 		A4E9EC5FECCC911B57163F70 /* Shape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 996EEDEFA57951C8FB5D51CD /* Shape.swift */; };
 		B72CF3A8C17E9B214F445A05 /* Color+Points.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61303A4E6C03BAF49CE74677 /* Color+Points.swift */; };
@@ -32,6 +35,9 @@
 		61303A4E6C03BAF49CE74677 /* Color+Points.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Points.swift"; sourceTree = "<group>"; };
 		7DB89258334FCD592C4FC249 /* HankenGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "HankenGrotesk-Bold.ttf"; sourceTree = "<group>"; };
 		996EEDEFA57951C8FB5D51CD /* Shape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shape.swift; sourceTree = "<group>"; };
+		9E11A2B3C4D5E6F708192A02 /* DetailCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailCharts.swift; sourceTree = "<group>"; };
+		9E11A2B3C4D5E6F708192A04 /* DetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailScreen.swift; sourceTree = "<group>"; };
+		9E11A2B3C4D5E6F708192A06 /* StrokeIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeIcon.swift; sourceTree = "<group>"; };
 		D09650A843CA901F368823E9 /* PointsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsApp.swift; sourceTree = "<group>"; };
 		E33543A14EEC3CCCC390ED77 /* HankenGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "HankenGrotesk-Regular.ttf"; sourceTree = "<group>"; };
 		E6FFAB91ADE1AFFE8720A0F5 /* PointHue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointHue.swift; sourceTree = "<group>"; };
@@ -64,10 +70,21 @@
 				4EC7517C0D6C1B63F8A799B1 /* Assets.xcassets */,
 				1A190E1596CB5EB37BAE977F /* ContentView.swift */,
 				D09650A843CA901F368823E9 /* PointsApp.swift */,
+				9E11A2B3C4D5E6F708192A07 /* Detail */,
 				701339A61423C3BDFC99457C /* Fonts */,
 				A3AF320C12A7ED8CDCDFDCCD /* Theme */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		9E11A2B3C4D5E6F708192A07 /* Detail */ = {
+			isa = PBXGroup;
+			children = (
+				9E11A2B3C4D5E6F708192A02 /* DetailCharts.swift */,
+				9E11A2B3C4D5E6F708192A04 /* DetailScreen.swift */,
+				9E11A2B3C4D5E6F708192A06 /* StrokeIcon.swift */,
+			);
+			path = Detail;
 			sourceTree = "<group>";
 		};
 		A3AF320C12A7ED8CDCDFDCCD /* Theme */ = {
@@ -186,6 +203,9 @@
 			files = (
 				B72CF3A8C17E9B214F445A05 /* Color+Points.swift in Sources */,
 				EB2230424DFF394C5B094A91 /* ContentView.swift in Sources */,
+				9E11A2B3C4D5E6F708192A01 /* DetailCharts.swift in Sources */,
+				9E11A2B3C4D5E6F708192A03 /* DetailScreen.swift in Sources */,
+				9E11A2B3C4D5E6F708192A05 /* StrokeIcon.swift in Sources */,
 				C154637ADFD7AA65118E2D39 /* PointHue.swift in Sources */,
 				A2B585020292FD3CFE189E26 /* PointsApp.swift in Sources */,
 				A4E9EC5FECCC911B57163F70 /* Shape.swift in Sources */,
