@@ -30,13 +30,13 @@ struct ContentView: View {
         }
     }
 
-    /// Renders the active Decompose child — the home grid, or a per-type counter when a tile is tapped.
+    /// Renders the active Decompose child — the home grid, or a point's detail when a tile is tapped.
     @ViewBuilder
     private func childView(_ child: RootComponentChild) -> some View {
         if let home = child as? RootComponentChildHome {
             HomeView(component: home.component)
         } else if let detail = child as? RootComponentChildDetail {
-            CounterView(component: detail.component)
+            DetailView(component: detail.component)
         } else if let create = child as? RootComponentChildCreate {
             CreateEditView(component: create.component)
         }
@@ -263,15 +263,15 @@ private final class RootStackModel: ObservableObject {
     }
 }
 
-// MARK: - Per-type counter (interim detail until M5)
+// MARK: - Per-point detail (interim counter rendering over the M5 DetailComponent; full trend UI is #129)
 
-private struct CounterView: View {
-    let component: CounterComponent
-    @StateObject private var model: CounterModel
+private struct DetailView: View {
+    let component: DetailComponent
+    @StateObject private var model: DetailModel
 
-    init(component: CounterComponent) {
+    init(component: DetailComponent) {
         self.component = component
-        _model = StateObject(wrappedValue: CounterModel(component))
+        _model = StateObject(wrappedValue: DetailModel(component))
     }
 
     var body: some View {
@@ -362,12 +362,12 @@ private struct SyncStatusView: View {
     }
 }
 
-/// Bridges the shared Decompose `Value<CounterStore.State>` into an observable SwiftUI model.
-private final class CounterModel: ObservableObject {
-    @Published var state: CounterStoreState
+/// Bridges the shared Decompose `Value<DetailStore.State>` into an observable SwiftUI model.
+private final class DetailModel: ObservableObject {
+    @Published var state: DetailStoreState
     private var cancellation: DecomposeCancellation?
 
-    init(_ component: CounterComponent) {
+    init(_ component: DetailComponent) {
         let s = component.state
         state = s.value
         cancellation = s.subscribe { [weak self] newState in

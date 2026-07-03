@@ -8,7 +8,7 @@ import com.arkivanov.decompose.router.stack.childStack
 import com.arkivanov.decompose.router.stack.pop
 import com.arkivanov.decompose.router.stack.pushNew
 import com.arkivanov.decompose.value.Value
-import com.points.core.presentation.counter.CounterComponent
+import com.points.core.presentation.detail.DetailComponent
 import com.points.core.presentation.edit.CreateEditComponent
 import com.points.core.presentation.home.HomeComponent
 import com.points.core.presentation.sync.SyncComponent
@@ -17,9 +17,9 @@ import kotlin.uuid.Uuid
 
 /**
  * Root of the Decompose tree. A [childStack] drives navigation: [Child.Home] (the M4 grid) is the initial
- * screen; tapping a tile pushes [Child.Detail] (the M2 [CounterComponent] for that type, the interim detail
- * until M5); the home FAB or a detail's edit affordance pushes [Child.Create] (the create/edit form, which
- * pops itself on save/cancel). The [SyncComponent] sits outside the stack as a persistent overlay.
+ * screen; tapping a tile pushes [Child.Detail] (the M5 [DetailComponent] for that type); the home FAB or a
+ * detail's edit affordance pushes [Child.Create] (the create/edit form, which pops itself on save/cancel).
+ * The [SyncComponent] sits outside the stack as a persistent overlay.
  *
  * Navigation state is not serialized (no process-death restore yet); a cold start re-derives Home.
  */
@@ -30,7 +30,7 @@ interface RootComponent {
 
     sealed interface Child {
         class Home(val component: HomeComponent) : Child
-        class Detail(val component: CounterComponent) : Child
+        class Detail(val component: DetailComponent) : Child
         class Create(val component: CreateEditComponent) : Child
     }
 }
@@ -39,7 +39,7 @@ interface RootComponent {
 class DefaultRootComponent(
     componentContext: ComponentContext,
     private val home: (ComponentContext, onOpen: (Uuid) -> Unit, onCreate: () -> Unit) -> HomeComponent,
-    private val detail: (ComponentContext, pointTypeId: Uuid, onBack: () -> Unit, onEdit: () -> Unit) -> CounterComponent,
+    private val detail: (ComponentContext, pointTypeId: Uuid, onBack: () -> Unit, onEdit: () -> Unit) -> DetailComponent,
     private val create: (ComponentContext, editId: Uuid?, onSaved: () -> Unit, onCancel: () -> Unit) -> CreateEditComponent,
     sync: (ComponentContext) -> SyncComponent,
 ) : RootComponent, ComponentContext by componentContext {
