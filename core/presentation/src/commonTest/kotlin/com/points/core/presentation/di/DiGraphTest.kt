@@ -9,8 +9,8 @@ import com.points.core.domain.DecrementPoint
 import com.points.core.domain.DeletePointType
 import com.points.core.domain.EditPointType
 import com.points.core.domain.IncrementPoint
+import com.points.core.domain.ObservePointTrend
 import com.points.core.domain.ObservePointTypes
-import com.points.core.domain.ObservePointValue
 import com.points.core.domain.ObserveSyncStatus
 import com.points.core.domain.ObserveTiles
 import com.points.core.domain.PointEvent
@@ -27,8 +27,10 @@ import com.points.core.domain.SyncStatus
 import com.points.core.presentation.root.RootComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.flowOf
+import com.points.core.domain.pointTrendOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.datetime.Instant
+import kotlinx.datetime.TimeZone
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.parameter.parametersOf
@@ -54,14 +56,19 @@ private val sampleTypeId = Uuid.parse("00000000-0000-0000-0000-0000000000aa")
 
 /**
  * Stand-in for the real data module: fake use cases so the component graph resolves without a SQL driver or
- * HTTP engine. [ObserveTiles] reports one tile to prove the home grid wires through; [ObservePointValue]
- * reports a fixed value so the detail child reflects the observed flow; create/edit are no-op fakes.
+ * HTTP engine. [ObserveTiles] reports one tile to prove the home grid wires through; [ObservePointTrend]
+ * derives a trend from a single 7-delta event so the detail child reflects the observed flow; create/edit
+ * are no-op fakes.
  */
 @OptIn(ExperimentalUuidApi::class)
 private val fakeDataModule = module {
     factory<IncrementPoint> { IncrementPoint { id, delta -> fakeEvent(id, delta) } }
     factory<DecrementPoint> { DecrementPoint { id, delta -> fakeEvent(id, -delta) } }
-    factory<ObservePointValue> { ObservePointValue { flowOf(7L) } }
+    factory<ObservePointTrend> {
+        ObservePointTrend { id ->
+            flowOf(pointTrendOf(sampleTile().type, listOf(fakeEvent(id, 7)), Instant.fromEpochSeconds(0), TimeZone.UTC))
+        }
+    }
     factory<ObserveSyncStatus> { ObserveSyncStatus { flowOf(SyncStatus.Synced) } }
     factory<SyncPointEvents> { SyncPointEvents { } }
     factory<ObservePointTypes> { ObservePointTypes { flowOf(emptyList()) } }
@@ -127,7 +134,7 @@ class DiGraphTest {
         assertEquals("5 / 8 today", home.component.state.value.tiles.single().meta)
         assertEquals(SyncStatus.Synced, root.sync.state.value.status)
 
-        // Tapping a tile pushes its per-type counter, which reflects the observed value (7).
+        // Tapping a tile pushes its detail, which reflects the observed trend's value (7).
         home.component.onTileClicked(sampleTypeId)
         val detail = root.stack.value.active.instance as RootComponent.Child.Detail
         assertEquals(7L, detail.component.state.value.value)

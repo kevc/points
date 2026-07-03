@@ -40,7 +40,7 @@ import com.points.android.ui.theme.PointHue
 import com.points.android.ui.theme.PointsTheme
 import com.points.android.ui.theme.accent
 import com.points.core.domain.SyncStatus
-import com.points.core.presentation.counter.CounterComponent
+import com.points.core.presentation.detail.DetailComponent
 import com.points.core.presentation.root.RootComponent
 import com.points.core.presentation.sync.SyncComponent
 import org.koin.core.context.GlobalContext
@@ -48,7 +48,7 @@ import org.koin.core.parameter.parametersOf
 
 /**
  * Single launcher activity. Builds the shared Decompose [RootComponent] (retained across configuration
- * changes) from Koin and renders its navigation stack — the home grid, or a per-type counter when a tile is
+ * changes) from Koin and renders its navigation stack — the home grid, or a point's detail when a tile is
  * tapped — with an unobtrusive sync-status overlay. Each foreground (`ON_RESUME`) nudges a reconcile.
  */
 class MainActivity : ComponentActivity() {
@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
                         Children(stack = root.stack) { child ->
                             when (val instance = child.instance) {
                                 is RootComponent.Child.Home -> HomeScreen(instance.component)
-                                is RootComponent.Child.Detail -> CounterScreen(instance.component)
+                                is RootComponent.Child.Detail -> DetailScreen(instance.component)
                                 is RootComponent.Child.Create -> CreateEditScreen(instance.component)
                             }
                         }
@@ -102,9 +102,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Per-type counter (the interim detail screen until M5): a back affordance, the value, and ± controls. */
+/**
+ * Per-point detail: currently the interim counter rendering (back affordance, value, ± controls) over the
+ * M5 [DetailComponent]; the full trend UI (stats, charts, activity log) lands with #128.
+ */
 @Composable
-private fun CounterScreen(component: CounterComponent) {
+private fun DetailScreen(component: DetailComponent) {
     val state by component.state.subscribeAsState()
     Column(modifier = Modifier.fillMaxSize()) {
         Row(

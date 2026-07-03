@@ -7,8 +7,8 @@ import com.arkivanov.mvikotlin.core.store.StoreFactory
 import com.arkivanov.mvikotlin.main.store.DefaultStoreFactory
 import com.points.core.data.di.dataModule
 import com.points.core.data.di.platformDataModule
-import com.points.core.presentation.counter.CounterComponent
-import com.points.core.presentation.counter.DefaultCounterComponent
+import com.points.core.presentation.detail.DefaultDetailComponent
+import com.points.core.presentation.detail.DetailComponent
 import com.points.core.presentation.edit.CreateEditComponent
 import com.points.core.presentation.edit.DefaultCreateEditComponent
 import com.points.core.presentation.home.DefaultHomeComponent
@@ -47,37 +47,21 @@ val presentationModule = module {
         )
     }
 
-    factory<CounterComponent> {
+    factory<DetailComponent> {
             (componentContext: ComponentContext, pointTypeId: Uuid, onBack: () -> Unit, onEdit: () -> Unit) ->
-        DefaultCounterComponent(
+        DefaultDetailComponent(
             componentContext = componentContext,
             storeFactory = get(),
             pointTypeId = pointTypeId,
+            observeTrend = get(),
             increment = get(),
             decrement = get(),
-            observeValue = get(),
-            observeTypes = get(),
             reset = get(),
             delete = get(),
             restore = get(),
             mainContext = get<CoroutineDispatcher>(named("main")),
             onBackPressed = onBack,
             onEditRequested = onEdit,
-        )
-    }
-
-    factory<CreateEditComponent> {
-            (componentContext: ComponentContext, editId: Uuid?, onSaved: () -> Unit, onCancel: () -> Unit) ->
-        DefaultCreateEditComponent(
-            componentContext = componentContext,
-            storeFactory = get(),
-            editId = editId,
-            create = get(),
-            edit = get(),
-            observeTypes = get(),
-            mainContext = get<CoroutineDispatcher>(named("main")),
-            onSaved = onSaved,
-            onCancelled = onCancel,
         )
     }
 
@@ -113,7 +97,7 @@ val presentationModule = module {
                 get<HomeComponent> { parametersOf(childContext, onOpen, onCreate) }
             },
             detail = { childContext, typeId, onBack, onEdit ->
-                get<CounterComponent> { parametersOf(childContext, typeId, onBack, onEdit) }
+                get<DetailComponent> { parametersOf(childContext, typeId, onBack, onEdit) }
             },
             create = { childContext, editId, onSaved, onCancel ->
                 get<CreateEditComponent> { parametersOf(childContext, editId, onSaved, onCancel) }
