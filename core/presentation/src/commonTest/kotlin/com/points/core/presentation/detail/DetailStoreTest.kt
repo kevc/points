@@ -101,9 +101,9 @@ class DetailStoreTest {
     }
 
     @Test
-    fun defaultsToTheWeekRangeAndTrendChart() = runTest {
+    fun defaultsToTheMonthRangeAndTrendChart() = runTest {
         val store = store(FakeLedger())
-        assertEquals(TrendRange.WEEK, store.state.range)
+        assertEquals(TrendRange.MONTH, store.state.range, "the design opens on the month view")
         assertEquals(ChartStyle.TREND, store.state.chart)
     }
 
