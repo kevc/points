@@ -61,7 +61,7 @@ interface DetailStore : Store<DetailStore.Intent, DetailStore.State, Nothing> {
 
     data class State(
         val trend: PointTrend? = null,
-        val range: TrendRange = TrendRange.WEEK,
+        val range: TrendRange = TrendRange.MONTH,
         val chart: ChartStyle = ChartStyle.TREND,
         val undoLabel: String? = null,
         val resetAmount: Long? = null,

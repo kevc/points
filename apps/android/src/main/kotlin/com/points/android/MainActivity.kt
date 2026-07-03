@@ -4,30 +4,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -35,12 +28,10 @@ import com.arkivanov.decompose.extensions.compose.stack.Children
 import com.arkivanov.decompose.extensions.compose.subscribeAsState
 import com.arkivanov.decompose.retainedComponent
 import com.points.android.ui.CreateEditScreen
+import com.points.android.ui.DetailScreen
 import com.points.android.ui.HomeScreen
-import com.points.android.ui.theme.PointHue
 import com.points.android.ui.theme.PointsTheme
-import com.points.android.ui.theme.accent
 import com.points.core.domain.SyncStatus
-import com.points.core.presentation.detail.DetailComponent
 import com.points.core.presentation.root.RootComponent
 import com.points.core.presentation.sync.SyncComponent
 import org.koin.core.context.GlobalContext
@@ -99,65 +90,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         root.sync.onAppForegrounded() // reconcile when brought to the foreground
-    }
-}
-
-/**
- * Per-point detail: currently the interim counter rendering (back affordance, value, ± controls) over the
- * M5 [DetailComponent]; the full trend UI (stats, charts, activity log) lands with #128.
- */
-@Composable
-private fun DetailScreen(component: DetailComponent) {
-    val state by component.state.subscribeAsState()
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(onClick = component::onBack) { Text("← Back") }
-            TextButton(onClick = component::onEdit) { Text("Edit") }
-        }
-        Column(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = state.value.toString(),
-                style = MaterialTheme.typography.displayLarge,
-                color = PointHue.forDegrees(state.hue).accent(),
-                modifier = Modifier.semantics { contentDescription = "counter value" },
-            )
-            Row(
-                modifier = Modifier.padding(top = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Button(onClick = component::onDecrement, enabled = !state.deleted) { Text("-") }
-                Button(onClick = component::onIncrement, enabled = !state.deleted) { Text("+") }
-            }
-            Row(
-                modifier = Modifier.padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                TextButton(onClick = component::onReset, enabled = !state.deleted) { Text("Reset to zero") }
-                TextButton(onClick = component::onDelete, enabled = !state.deleted) { Text("Remove") }
-            }
-        }
-        state.undoLabel?.let { label ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(label, color = MaterialTheme.colorScheme.onSurface)
-                TextButton(onClick = component::onUndo) { Text("Undo") }
-            }
-        }
     }
 }
 
