@@ -81,21 +81,6 @@ val presentationModule = module {
         )
     }
 
-    factory<CreateEditComponent> {
-            (componentContext: ComponentContext, editId: Uuid?, onSaved: () -> Unit, onCancel: () -> Unit) ->
-        DefaultCreateEditComponent(
-            componentContext = componentContext,
-            storeFactory = get(),
-            editId = editId,
-            create = get(),
-            edit = get(),
-            observeTypes = get(),
-            mainContext = get<CoroutineDispatcher>(named("main")),
-            onSaved = onSaved,
-            onCancelled = onCancel,
-        )
-    }
-
     factory<SyncComponent> { (componentContext: ComponentContext) ->
         DefaultSyncComponent(
             componentContext = componentContext,
