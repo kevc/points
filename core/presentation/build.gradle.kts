@@ -14,8 +14,17 @@ kotlin {
     val frameworkName = "PointsKit"
     // -lsqlite3: the SQLDelight native (SQLiter) driver pulled in via core:data calls into the
     // system libsqlite3, so the exported framework must link it.
-    iosArm64().binaries.framework { baseName = frameworkName; isStatic = false; linkerOpts("-lsqlite3") }
-    iosSimulatorArm64().binaries.framework { baseName = frameworkName; isStatic = false; linkerOpts("-lsqlite3") }
+    // export(core.domain): Swift reads the trend derivations (series/heatmap/recentLog) straight off
+    // PointTrend; without the export those top-level extension functions are dropped from the framework
+    // and the domain classes cross only as opaque "Domain"-prefixed references.
+    iosArm64().binaries.framework {
+        baseName = frameworkName; isStatic = false; linkerOpts("-lsqlite3")
+        export(projects.core.domain)
+    }
+    iosSimulatorArm64().binaries.framework {
+        baseName = frameworkName; isStatic = false; linkerOpts("-lsqlite3")
+        export(projects.core.domain)
+    }
 
     sourceSets {
         commonMain.dependencies {
