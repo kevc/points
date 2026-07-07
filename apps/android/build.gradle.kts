@@ -1,6 +1,7 @@
 plugins {
     id("points.android.application")
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.compose.screenshot)
 }
 
 android {
@@ -15,6 +16,11 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // The Compose screenshot plugin reads this per-module DSL flag at apply time (the gradle.properties value
+    // alone isn't enough); it enables AGP's `screenshotTest` source set + the validate/update render tasks.
+    @Suppress("UnstableApiUsage")
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
 }
 
 dependencies {
@@ -30,4 +36,8 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Compose Preview Screenshot Testing: previews live in the `screenshotTest` source set.
+    screenshotTestImplementation(platform(libs.androidx.compose.bom))
+    screenshotTestImplementation(libs.androidx.compose.ui.tooling)
 }
