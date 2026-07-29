@@ -4,7 +4,7 @@ import SwiftUI
 /// design handoff path data so the native icons match the prototype stroke for stroke (and the Android
 /// `IconPaths` set).
 enum StrokeGlyph {
-    case back, edit, sliders, plus, minus
+    case back, edit, sliders, plus, minus, expand, chevronRight
 
     /// The glyph's path in its 24×24 design viewport.
     var path: Path {
@@ -34,6 +34,15 @@ enum StrokeGlyph {
             p.move(to: .init(x: 5, y: 12)); p.addLine(to: .init(x: 19, y: 12))
         case .minus: // M5 12h14
             p.move(to: .init(x: 5, y: 12)); p.addLine(to: .init(x: 19, y: 12))
+        case .expand: // M15 4h5v5M20 4l-6 6M9 20H4v-5M4 20l6-6
+            p.move(to: .init(x: 15, y: 4)); p.addLine(to: .init(x: 20, y: 4)); p.addLine(to: .init(x: 20, y: 9))
+            p.move(to: .init(x: 20, y: 4)); p.addLine(to: .init(x: 14, y: 10))
+            p.move(to: .init(x: 9, y: 20)); p.addLine(to: .init(x: 4, y: 20)); p.addLine(to: .init(x: 4, y: 15))
+            p.move(to: .init(x: 4, y: 20)); p.addLine(to: .init(x: 10, y: 14))
+        case .chevronRight: // M9 5l7 7-7 7
+            p.move(to: .init(x: 9, y: 5))
+            p.addLine(to: .init(x: 16, y: 12))
+            p.addLine(to: .init(x: 9, y: 19))
         }
         return p
     }
