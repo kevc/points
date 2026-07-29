@@ -26,6 +26,8 @@ object IconPaths {
     const val PLUS = "M12 5v14M5 12h14"
     const val MINUS = "M5 12h14"
     const val UNDO = "M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-1"
+    const val EXPAND = "M15 4h5v5M20 4l-6 6M9 20H4v-5M4 20l6-6"
+    const val CHEVRON_RIGHT = "M9 5l7 7-7 7"
     const val TRASH = "M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"
 }
 
