@@ -2,6 +2,7 @@
 
 package com.points.android.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +72,7 @@ fun DetailScreen(component: DetailComponent, modifier: Modifier = Modifier) {
     val state by component.state.subscribeAsState()
     val trend = state.trend
     var moreSheet by remember { mutableStateOf(false) }
+    var focus by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
 
     if (trend == null) {
@@ -81,53 +83,67 @@ fun DetailScreen(component: DetailComponent, modifier: Modifier = Modifier) {
     }
     val accent = PointHue.forDegrees(state.hue).accent()
 
-    Column(modifier = modifier.fillMaxSize()) {
-        AppBar(
-            title = trend.type.name,
-            onBack = component::onBack,
-            onEdit = component::onEdit,
-            onMore = { moreSheet = true },
-        )
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            AppBar(
+                title = trend.type.name,
+                onBack = component::onBack,
+                onEdit = component::onEdit,
+                onMore = { moreSheet = true },
+            )
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-        ) {
-            Hero(trend = trend, accent = accent)
-            CounterControls(
-                trend = trend,
-                enabled = !state.deleted,
-                onIncrement = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    component.onIncrement()
-                },
-                onDecrement = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    component.onDecrement()
-                },
-                onIncrementBy = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    component.onIncrementBy(it)
-                },
-            )
-            StatsRow(trend = trend)
-            ChartCard(
-                trend = trend,
-                chart = state.chart,
-                range = state.range,
-                accent = accent,
-                onSetChart = component::onSetChart,
-                onSetRange = component::onSetRange,
-            )
-            SectionLabel("Recent activity")
-            ActivityLog(trend = trend, accent = accent)
-            Spacer(Modifier.height(32.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Hero(trend = trend, accent = accent)
+                CounterControls(
+                    trend = trend,
+                    enabled = !state.deleted,
+                    onIncrement = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        component.onIncrement()
+                    },
+                    onDecrement = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        component.onDecrement()
+                    },
+                    onIncrementBy = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        component.onIncrementBy(it)
+                    },
+                    onExpand = { focus = true },
+                )
+                StatsRow(trend = trend)
+                ChartCard(
+                    trend = trend,
+                    chart = state.chart,
+                    range = state.range,
+                    accent = accent,
+                    onSetChart = component::onSetChart,
+                    onSetRange = component::onSetRange,
+                )
+                SectionLabel("Recent activity")
+                ActivityLog(trend = trend, accent = accent)
+                Spacer(Modifier.height(32.dp))
+            }
+
+            state.undoLabel?.let { label ->
+                UndoBar(label = label, onUndo = component::onUndo, onDismiss = component::onDismissUndo)
+            }
         }
 
-        state.undoLabel?.let { label ->
-            UndoBar(label = label, onUndo = component::onUndo, onDismiss = component::onDismissUndo)
+        if (focus) {
+            BackHandler { focus = false }
+            FocusCounter(
+                trend = trend,
+                accent = accent,
+                onIncrement = component::onIncrement,
+                onDecrement = component::onDecrement,
+                onClose = { focus = false },
+            )
         }
     }
 
@@ -232,6 +248,7 @@ private fun CounterControls(
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
     onIncrementBy: (Long) -> Unit,
+    onExpand: () -> Unit,
 ) {
     val step = trend.type.step.coerceAtLeast(1L)
     val chips = if (step >= 10) listOf(step, step * 2, step * 5) else listOf(1L, 5L, 10L)
@@ -256,6 +273,14 @@ private fun CounterControls(
             onClick = onIncrement,
             description = "increment",
         ) { StrokeIcon(IconPaths.PLUS, size = 40.dp, tint = MaterialTheme.colorScheme.background) }
+        RoundButton(
+            size = 64.dp,
+            background = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            enabled = enabled,
+            onClick = onExpand,
+            description = "focus mode",
+        ) { StrokeIcon(IconPaths.EXPAND, size = 22.dp) }
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp),
