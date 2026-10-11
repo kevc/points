@@ -48,6 +48,7 @@ struct ContentView: View {
 private struct HomeView: View {
     let component: HomeComponent
     @StateObject private var model: HomeModel
+    @State private var quickTileId: KotlinUuid? = nil
 
     init(component: HomeComponent) {
         self.component = component
@@ -61,6 +62,9 @@ private struct HomeView: View {
 
     var body: some View {
         let tiles = model.state.tiles
+        // the long-pressed tile, looked up live so the sheet's value updates as you tap
+        let quickTile = tiles.first { $0.id == quickTileId }
+
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -85,6 +89,10 @@ private struct HomeView: View {
                                     onDecrement: { component.onDecrement(pointTypeId: tile.id, step: tile.step) }
                                 )
                                 .onTapGesture { component.onTileClicked(pointTypeId: tile.id) }
+                                .onLongPressGesture {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    withAnimation(.easeOut(duration: 0.25)) { quickTileId = tile.id }
+                                }
                             }
                         }
                         .padding(16)
@@ -103,7 +111,134 @@ private struct HomeView: View {
                     .clipShape(Capsule())
             }
             .padding(20)
+
+            if let tile = quickTile {
+                QuickSheetView(
+                    tile: tile,
+                    onIncrementBy: { component.onIncrement(pointTypeId: tile.id, step: $0) },
+                    onDecrement: { component.onDecrement(pointTypeId: tile.id, step: tile.step) },
+                    onOpen: {
+                        quickTileId = nil
+                        component.onTileClicked(pointTypeId: tile.id)
+                    },
+                    onDismiss: { withAnimation(.easeOut(duration: 0.25)) { quickTileId = nil } }
+                )
+            }
         }
+    }
+}
+
+/// The home-tile long-press sheet (design `screens-detail.jsx` → `QuickSheet`): the point's name and live
+/// value, a ± stepper with custom step chips, and a full-width Open details action. A hand-rolled bottom
+/// sheet — `presentationDetents` needs iOS 16 and the deployment target is 15.
+private struct QuickSheetView: View {
+    let tile: HomeTile
+    let onIncrementBy: (Int64) -> Void
+    let onDecrement: () -> Void
+    let onOpen: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        let step = max(tile.step, 1)
+        let chips: [Int64] = step >= 10 ? [step, step * 5] : [1, 5, 10]
+
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onDismiss)
+
+            VStack(spacing: 0) {
+                Capsule()
+                    .fill(Color.line)
+                    .frame(width: 36, height: 4)
+                    .padding(.top, 10)
+                    .padding(.bottom, 16)
+
+                HStack(alignment: .lastTextBaseline) {
+                    Text(tile.name).font(.headline).foregroundColor(.ink)
+                    Spacer()
+                    Text(tile.valueText)
+                        .font(.points(30, .semibold))
+                        .monospacedDigit()
+                        .foregroundColor(.ink)
+                }
+                .padding(.bottom, 18)
+
+                HStack(spacing: 8) {
+                    roundStep(glyph: .minus, label: "decrement") {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        onDecrement()
+                    }
+                    ForEach(chips, id: \.self) { amount in
+                        Button {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            onIncrementBy(amount)
+                        } label: {
+                            Text("+\(amount)")
+                                .font(.points(14, .semibold))
+                                .foregroundColor(.inkDim)
+                                .padding(.horizontal, 16)
+                                .frame(height: 46)
+                                .overlay(Capsule().strokeBorder(Color.line, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    roundStep(glyph: .plus, label: "increment") {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        onIncrementBy(step)
+                    }
+                }
+                .padding(.bottom, 20)
+
+                Button(action: onOpen) {
+                    HStack(spacing: 6) {
+                        Text("Open details").font(.points(15.5, .semibold))
+                        StrokeIconView(glyph: .chevronRight, size: 18, tint: .bg)
+                    }
+                    .foregroundColor(.bg)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Capsule().fill(Color.ink))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 22)
+            .padding(.bottom, 32)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedCornersShape(radius: Radius.sheet)
+                    .fill(Color.surface)
+                    .ignoresSafeArea(edges: .bottom)
+            )
+            .transition(.move(edge: .bottom))
+        }
+    }
+
+    private func roundStep(glyph: StrokeGlyph, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle().fill(Color.surfaceHigh)
+                StrokeIconView(glyph: glyph, size: 22)
+            }
+            .frame(width: 46, height: 46)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+/// A rectangle rounded only at its top corners — the bottom sheet's silhouette.
+private struct RoundedCornersShape: Shape {
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        Path(
+            UIBezierPath(
+                roundedRect: rect,
+                byRoundingCorners: [.topLeft, .topRight],
+                cornerRadii: CGSize(width: radius, height: radius)
+            ).cgPath
+        )
     }
 }
 

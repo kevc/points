@@ -10,6 +10,7 @@ struct DetailView: View {
     let component: DetailComponent
     @StateObject private var model: DetailModel
     @State private var showMore = false
+    @State private var showFocus = false
 
     init(component: DetailComponent) {
         self.component = component
@@ -27,41 +28,55 @@ struct DetailView: View {
 
     private func content(trend: PointTrend, state: DetailStoreState) -> some View {
         let accent = PointHue.forDegrees(Int(state.hue)).color
-        return VStack(spacing: 0) {
-            AppBarView(
-                title: trend.type.name,
-                onBack: component.onBack,
-                onEdit: component.onEdit,
-                onMore: { showMore = true }
-            )
+        return ZStack {
+            VStack(spacing: 0) {
+                AppBarView(
+                    title: trend.type.name,
+                    onBack: component.onBack,
+                    onEdit: component.onEdit,
+                    onMore: { showMore = true }
+                )
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    HeroView(trend: trend, accent: accent)
-                    CounterControlsView(
-                        trend: trend,
-                        enabled: !state.deleted,
-                        onIncrement: { counterHaptic(); component.onIncrement() },
-                        onDecrement: { counterHaptic(); component.onDecrement() },
-                        onIncrementBy: { counterHaptic(); component.onIncrementBy(amount: $0) }
-                    )
-                    StatsRowView(trend: trend)
-                    ChartCardView(
-                        trend: trend,
-                        chart: state.chart,
-                        range: state.range,
-                        accent: accent,
-                        onSetChart: { component.onSetChart(chart: $0) },
-                        onSetRange: { component.onSetRange(range: $0) }
-                    )
-                    SectionLabelView(text: "Recent activity")
-                    ActivityLogView(trend: trend, accent: accent)
-                    Spacer().frame(height: 32)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        HeroView(trend: trend, accent: accent)
+                        CounterControlsView(
+                            trend: trend,
+                            enabled: !state.deleted,
+                            onIncrement: { counterHaptic(); component.onIncrement() },
+                            onDecrement: { counterHaptic(); component.onDecrement() },
+                            onIncrementBy: { counterHaptic(); component.onIncrementBy(amount: $0) },
+                            onExpand: { showFocus = true }
+                        )
+                        StatsRowView(trend: trend)
+                        ChartCardView(
+                            trend: trend,
+                            chart: state.chart,
+                            range: state.range,
+                            accent: accent,
+                            onSetChart: { component.onSetChart(chart: $0) },
+                            onSetRange: { component.onSetRange(range: $0) }
+                        )
+                        SectionLabelView(text: "Recent activity")
+                        ActivityLogView(trend: trend, accent: accent)
+                        Spacer().frame(height: 32)
+                    }
+                }
+
+                if let label = state.undoLabel {
+                    UndoBarView(label: label, onUndo: component.onUndo, onDismiss: component.onDismissUndo)
                 }
             }
 
-            if let label = state.undoLabel {
-                UndoBarView(label: label, onUndo: component.onUndo, onDismiss: component.onDismissUndo)
+            if showFocus {
+                FocusCounterView(
+                    trend: trend,
+                    accent: accent,
+                    onIncrement: component.onIncrement,
+                    onDecrement: component.onDecrement,
+                    onClose: { showFocus = false }
+                )
+                .transition(.opacity)
             }
         }
         .confirmationDialog(trend.type.name, isPresented: $showMore, titleVisibility: .visible) {
@@ -171,6 +186,7 @@ private struct CounterControlsView: View {
     let onIncrement: () -> Void
     let onDecrement: () -> Void
     let onIncrementBy: (Int64) -> Void
+    let onExpand: () -> Void
 
     var body: some View {
         let step = max(trend.type.step, 1)
@@ -183,6 +199,9 @@ private struct CounterControlsView: View {
                 }
                 roundButton(diameter: 96, background: .ink, action: onIncrement, label: "increment") {
                     StrokeIconView(glyph: .plus, size: 40, tint: .bg)
+                }
+                roundButton(diameter: 64, background: .surfaceHigh, action: onExpand, label: "focus mode") {
+                    StrokeIconView(glyph: .expand, size: 22)
                 }
             }
             .padding(.horizontal, 22)

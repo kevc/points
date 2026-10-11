@@ -13,6 +13,7 @@
 		19B7E8469E13BA2C2D417D1C /* HankenGrotesk-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4697B3A346615436FFF6E0CF /* HankenGrotesk-SemiBold.ttf */; };
 		6106FE144176836F72248741 /* HankenGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2BEBCB093CB497D2CDE36B7C /* HankenGrotesk-Medium.ttf */; };
 		9E11A2B3C4D5E6F708192A01 /* DetailCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E11A2B3C4D5E6F708192A02 /* DetailCharts.swift */; };
+		9E11A2B3C4D5E6F708192A08 /* FocusCounter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E11A2B3C4D5E6F708192A09 /* FocusCounter.swift */; };
 		9E11A2B3C4D5E6F708192A03 /* DetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E11A2B3C4D5E6F708192A04 /* DetailScreen.swift */; };
 		9E11A2B3C4D5E6F708192A05 /* StrokeIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E11A2B3C4D5E6F708192A06 /* StrokeIcon.swift */; };
 		A2B585020292FD3CFE189E26 /* PointsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09650A843CA901F368823E9 /* PointsApp.swift */; };
@@ -36,6 +37,7 @@
 		7DB89258334FCD592C4FC249 /* HankenGrotesk-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "HankenGrotesk-Bold.ttf"; sourceTree = "<group>"; };
 		996EEDEFA57951C8FB5D51CD /* Shape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shape.swift; sourceTree = "<group>"; };
 		9E11A2B3C4D5E6F708192A02 /* DetailCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailCharts.swift; sourceTree = "<group>"; };
+		9E11A2B3C4D5E6F708192A09 /* FocusCounter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCounter.swift; sourceTree = "<group>"; };
 		9E11A2B3C4D5E6F708192A04 /* DetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailScreen.swift; sourceTree = "<group>"; };
 		9E11A2B3C4D5E6F708192A06 /* StrokeIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrokeIcon.swift; sourceTree = "<group>"; };
 		D09650A843CA901F368823E9 /* PointsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsApp.swift; sourceTree = "<group>"; };
@@ -82,6 +84,7 @@
 			children = (
 				9E11A2B3C4D5E6F708192A02 /* DetailCharts.swift */,
 				9E11A2B3C4D5E6F708192A04 /* DetailScreen.swift */,
+				9E11A2B3C4D5E6F708192A09 /* FocusCounter.swift */,
 				9E11A2B3C4D5E6F708192A06 /* StrokeIcon.swift */,
 			);
 			path = Detail;
@@ -205,6 +208,7 @@
 				EB2230424DFF394C5B094A91 /* ContentView.swift in Sources */,
 				9E11A2B3C4D5E6F708192A01 /* DetailCharts.swift in Sources */,
 				9E11A2B3C4D5E6F708192A03 /* DetailScreen.swift in Sources */,
+				9E11A2B3C4D5E6F708192A08 /* FocusCounter.swift in Sources */,
 				9E11A2B3C4D5E6F708192A05 /* StrokeIcon.swift in Sources */,
 				C154637ADFD7AA65118E2D39 /* PointHue.swift in Sources */,
 				A2B585020292FD3CFE189E26 /* PointsApp.swift in Sources */,
