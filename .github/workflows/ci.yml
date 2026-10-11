@@ -68,6 +68,11 @@ jobs:
         # Installs the command-line tools and puts `sdkmanager` on PATH for the
         # Android unit-test variants.
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default (`tools platform-tools`) asks for the legacy
+          # `tools` package, which current cmdline-tools no longer serve —
+          # sdkmanager then exits 1 and fails the job.
+          packages: platform-tools
 
       - name: Install Android SDK packages
         # AGP needs compileSdk 36 / build-tools 36; install and accept licenses
